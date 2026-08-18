@@ -1,12 +1,35 @@
-import { app, BrowserWindow, Menu, protocol, net } from 'electron'
+import { app, BrowserWindow, Menu, protocol, net, nativeImage } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
+import iconPng from '../../resources/icon.png?asset'
 import { registerIpcHandlers } from './ipc/register'
 import { resolveMediaPath } from './services/media'
 import { backupOnQuitIfEnabled, handleOpenFgtreeFile } from './services/pack'
 import { closeProject } from './services/project'
 
 let mainWindow: BrowserWindow | null = null
+let cachedAppIcon: Electron.NativeImage | null = null
+
+function getAppIcon(): Electron.NativeImage {
+  if (!cachedAppIcon) {
+    cachedAppIcon = nativeImage.createFromPath(iconPng)
+    if (cachedAppIcon.isEmpty()) {
+      cachedAppIcon = nativeImage.createEmpty()
+    }
+  }
+  return cachedAppIcon
+}
+
+function setDockIcon(): void {
+  if (process.platform !== 'darwin') return
+  const icon = getAppIcon()
+  if (icon.isEmpty()) return
+  try {
+    app.dock?.setIcon(icon)
+  } catch {
+    // Dev mode uses PNG; packaged .app icon comes from Info.plist.
+  }
+}
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -28,6 +51,7 @@ function createWindow(): void {
     minWidth: 960,
     minHeight: 640,
     show: false,
+    icon: getAppIcon(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,
@@ -97,6 +121,8 @@ if (!gotLock) {
   })
 
   app.whenReady().then(() => {
+    setDockIcon()
+
     protocol.handle('family-media', (request) => {
       const url = new URL(request.url)
       const relative = decodeURIComponent(url.pathname.slice(1))

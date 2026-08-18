@@ -62,8 +62,10 @@
     "appId": "com.family.geneology",
     "productName": "Family Geneology",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
+    "icon": "build/icon.png",
     "files": [
       "out/**/*",
       "package.json"
@@ -73,12 +75,14 @@
       "node_modules/sharp/**"
     ],
     "mac": {
+      "icon": "build/icon.icns",
       "target": [
         "dmg"
       ],
       "category": "public.app-category.productivity"
     },
     "win": {
+      "icon": "build/icon.ico",
       "target": [
         "nsis"
       ]
@@ -88,7 +92,8 @@
         "ext": "fgtree",
         "name": "Family Geneology Tree",
         "description": "Family genealogy project archive",
-        "role": "Editor"
+        "role": "Editor",
+        "icon": "build/icon"
       }
     ]
   }
