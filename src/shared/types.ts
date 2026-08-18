@@ -244,7 +244,7 @@ export interface TreeEdge {
   id: string
   source: string
   target: string
-  kind: 'parent' | 'partner'
+  kind: 'parent' | 'partner' | 'sibling'
 }
 
 export interface TreeData {
@@ -387,7 +387,13 @@ export interface Api {
     delete: (id: string) => Promise<void>
   }
   media: {
-    add: (target: { personId?: string; eventId?: string }) => Promise<MediaItem | null>
+    add: (target: {
+      personId?: string
+      eventId?: string
+      imagesOnly?: boolean
+      setPrimary?: boolean
+      multiple?: boolean
+    }) => Promise<MediaItem[]>
     list: (target: { personId?: string; eventId?: string }) => Promise<MediaItem[]>
     delete: (id: string) => Promise<void>
     setPrimary: (personId: string, mediaId: string) => Promise<void>

@@ -3,8 +3,10 @@ import { useTranslation } from 'react-i18next'
 import type { ProjectMeta, Person, PersonDetail, TreeData, AppSettings, MenuCommand } from '@shared/types'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { PersonDetailPanel } from './components/PersonDetailPanel'
+import { PersonAvatar } from './components/PersonAvatar'
 import { TreeView } from './components/TreeView'
 import { personLabel, formatLifeSpan } from './lib/labels'
+import appIcon from './assets/icon.png'
 
 export default function App() {
   const { t } = useTranslation()
@@ -95,11 +97,21 @@ export default function App() {
     if (selectedId) void refreshPerson(selectedId)
   }, [selectedId, refreshPerson])
 
+  const refreshTree = useCallback(async (personId: string) => {
+    const tree = await window.api.tree.get(personId, 4)
+    setTreeData(tree)
+  }, [])
+
+  const familyTreeKey =
+    personDetail?.id === selectedId
+      ? personDetail.families.map((f) => `${f.id}:${f.partners.length}:${f.children.length}`).join('|')
+      : ''
+
   useEffect(() => {
     if (view === 'tree' && selectedId) {
-      void window.api.tree.get(selectedId, 4).then(setTreeData)
+      void refreshTree(selectedId)
     }
-  }, [view, selectedId])
+  }, [view, selectedId, familyTreeKey, refreshTree])
 
   const handleCreate = async (name: string) => {
     try {
@@ -218,6 +230,7 @@ export default function App() {
   return (
     <div className="h-screen flex flex-col bg-[#f4f1eb]">
       <header className="flex items-center gap-4 px-4 py-3 bg-white border-b border-stone-200 shadow-sm">
+        <img src={appIcon} alt="" width={28} height={28} className="w-7 h-7" />
         <h1 className="font-serif text-lg text-stone-800">{project.name}</h1>
         {project.cloudWarning && (
           <span className="text-xs bg-amber-100 text-amber-900 px-2 py-1 rounded">{t('cloudWarning')}</span>
@@ -268,20 +281,26 @@ export default function App() {
               </div>
               <ul className="flex-1 overflow-auto">
                 {people.map((p) => (
-                  <li key={p.id}>
+                  <li
+                    key={p.id}
+                    className={`flex items-center gap-2 px-3 py-2 text-sm hover:bg-stone-50 ${selectedId === p.id ? 'bg-stone-100' : ''}`}
+                  >
+                    <PersonAvatar
+                      personId={p.id}
+                      thumbUrl={p.thumbUrl}
+                      size="sm"
+                      onUpdated={async () => {
+                        await refreshPeople()
+                        if (selectedId === p.id) await refreshPerson(p.id)
+                      }}
+                    />
                     <button
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-stone-50 flex gap-2 ${selectedId === p.id ? 'bg-stone-100 font-medium' : ''}`}
+                      type="button"
+                      className={`flex-1 min-w-0 text-left ${selectedId === p.id ? 'font-medium' : ''}`}
                       onClick={() => selectPerson(p.id)}
                     >
-                      {p.thumbUrl ? (
-                        <img src={p.thumbUrl} alt="" className="w-8 h-8 rounded object-cover shrink-0" />
-                      ) : (
-                        <div className="w-8 h-8 rounded bg-stone-100 shrink-0" />
-                      )}
-                      <div className="min-w-0">
-                        <div className="truncate">{personLabel(p)}</div>
-                        <div className="text-xs text-stone-500 mt-0.5">{formatLifeSpan(p)}</div>
-                      </div>
+                      <div className="truncate">{personLabel(p)}</div>
+                      <div className="text-xs text-stone-500 mt-0.5">{formatLifeSpan(p)}</div>
                     </button>
                   </li>
                 ))}
@@ -329,6 +348,7 @@ export default function App() {
           <div className="flex-1 min-h-0">
             {treeData ? (
               <TreeView
+                key={treeData.focusPersonId}
                 data={treeData}
                 onSelectPerson={(id) => {
                   void flushThen(() => {

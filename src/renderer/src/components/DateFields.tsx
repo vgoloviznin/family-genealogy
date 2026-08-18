@@ -1,4 +1,5 @@
 import type { PartialDate, DatePrecision } from '@shared/types'
+import { datePartsVisibility, trimPartialDateForPrecision } from '@shared/partial-date'
 
 interface Props {
   value: PartialDate
@@ -17,13 +18,19 @@ const precisions: { value: DatePrecision; label: string }[] = [
 ]
 
 export function DateFields({ value, onChange, label }: Props) {
+  const parts = datePartsVisibility(value.precision)
+  const showNumeric = parts.day || parts.month || parts.year
+  const colCount = [parts.day, parts.month, parts.year].filter(Boolean).length
+
   return (
     <div className="space-y-2">
       {label && <div className="text-sm font-medium text-stone-600">{label}</div>}
       <select
         className="w-full border border-stone-300 rounded px-2 py-1 text-sm"
         value={value.precision}
-        onChange={(e) => onChange({ ...value, precision: e.target.value as DatePrecision })}
+        onChange={(e) =>
+          onChange(trimPartialDateForPrecision({ ...value, precision: e.target.value as DatePrecision }))
+        }
       >
         {precisions.map((p) => (
           <option key={p.value} value={p.value}>
@@ -31,29 +38,38 @@ export function DateFields({ value, onChange, label }: Props) {
           </option>
         ))}
       </select>
-      {value.precision !== 'unknown' && (
-        <div className="grid grid-cols-3 gap-2">
-          <input
-            type="number"
-            placeholder="День"
-            className="border border-stone-300 rounded px-2 py-1 text-sm"
-            value={value.day ?? ''}
-            onChange={(e) => onChange({ ...value, day: e.target.value ? Number(e.target.value) : null })}
-          />
-          <input
-            type="number"
-            placeholder="Месяц"
-            className="border border-stone-300 rounded px-2 py-1 text-sm"
-            value={value.month ?? ''}
-            onChange={(e) => onChange({ ...value, month: e.target.value ? Number(e.target.value) : null })}
-          />
-          <input
-            type="number"
-            placeholder="Год"
-            className="border border-stone-300 rounded px-2 py-1 text-sm"
-            value={value.year ?? ''}
-            onChange={(e) => onChange({ ...value, year: e.target.value ? Number(e.target.value) : null })}
-          />
+      {showNumeric && (
+        <div
+          className="grid gap-2"
+          style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
+        >
+          {parts.day && (
+            <input
+              type="number"
+              placeholder="День"
+              className="border border-stone-300 rounded px-2 py-1 text-sm"
+              value={value.day ?? ''}
+              onChange={(e) => onChange({ ...value, day: e.target.value ? Number(e.target.value) : null })}
+            />
+          )}
+          {parts.month && (
+            <input
+              type="number"
+              placeholder="Месяц"
+              className="border border-stone-300 rounded px-2 py-1 text-sm"
+              value={value.month ?? ''}
+              onChange={(e) => onChange({ ...value, month: e.target.value ? Number(e.target.value) : null })}
+            />
+          )}
+          {parts.year && (
+            <input
+              type="number"
+              placeholder="Год"
+              className="border border-stone-300 rounded px-2 py-1 text-sm"
+              value={value.year ?? ''}
+              onChange={(e) => onChange({ ...value, year: e.target.value ? Number(e.target.value) : null })}
+            />
+          )}
         </div>
       )}
       <input

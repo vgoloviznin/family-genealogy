@@ -105,17 +105,41 @@ export async function listMediaForEvent(eventId: string): Promise<MediaItem[]> {
 export async function addMedia(target: {
   personId?: string
   eventId?: string
-}): Promise<MediaItem | null> {
+  imagesOnly?: boolean
+  setPrimary?: boolean
+  multiple?: boolean
+}): Promise<MediaItem[]> {
+  const allowMultiple = target.multiple ?? !target.setPrimary
   const result = await dialog.showOpenDialog({
-    title: 'Добавить файл',
-    properties: ['openFile'],
-    filters: [
-      { name: 'Media', extensions: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'pdf', 'doc', 'docx'] }
-    ]
+    title: target.imagesOnly ? 'Выбрать фото' : 'Добавить файлы',
+    properties: allowMultiple ? ['openFile', 'multiSelections'] : ['openFile'],
+    filters: target.imagesOnly
+      ? [{ name: 'Изображения', extensions: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'] }]
+      : [{ name: 'Media', extensions: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'pdf', 'doc', 'docx'] }]
   })
-  if (result.canceled || !result.filePaths[0]) return null
+  if (result.canceled || result.filePaths.length === 0) return []
 
-  const sourcePath = result.filePaths[0]
+  const items: MediaItem[] = []
+  let primarySet = false
+
+  for (const sourcePath of result.filePaths) {
+    const item = await importMediaFile(sourcePath, target)
+    if (!item) continue
+    if (target.setPrimary && target.personId && !primarySet && IMAGE_TYPES.has(item.mimeType)) {
+      await setPrimaryPhoto(target.personId, item.id)
+      item.isPrimary = true
+      primarySet = true
+    }
+    items.push(item)
+  }
+
+  return items
+}
+
+async function importMediaFile(
+  sourcePath: string,
+  target: { personId?: string; eventId?: string }
+): Promise<MediaItem | null> {
   const project = requireProject()
   const meta = getDeviceMeta()
   const ts = nowIso()
@@ -167,7 +191,7 @@ export async function addMedia(target: {
   })
 
   const [asset] = await db.select().from(schema.mediaAssets).where(eq(schema.mediaAssets.id, id))
-  return mapMediaItem(asset!)
+  return asset ? await mapMediaItem(asset) : null
 }
 
 export async function deleteMedia(id: string): Promise<void> {

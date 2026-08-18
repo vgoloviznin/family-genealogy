@@ -41,6 +41,25 @@ describe('formatDate', () => {
       })
     ).toBe('конец XIX в.')
   })
+
+  it('formats year only', () => {
+    expect(
+      formatDate({
+        precision: 'year',
+        year: 1920
+      })
+    ).toBe('1920')
+  })
+
+  it('formats year and month without day', () => {
+    expect(
+      formatDate({
+        precision: 'month',
+        year: 1920,
+        month: 3
+      })
+    ).toBe('03.1920')
+  })
 })
 
 describe('spouseLabel', () => {

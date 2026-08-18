@@ -10,6 +10,16 @@ describe('computeSortKey', () => {
     expect(computeSortKey({ precision: 'year', year: 1945 })).toBe(19450615)
   })
 
+  it('builds sort key from year and month with default day', () => {
+    expect(
+      computeSortKey({
+        precision: 'month',
+        year: 1945,
+        month: 3
+      })
+    ).toBe(19450315)
+  })
+
   it('builds sort key from exact date', () => {
     expect(
       computeSortKey({
@@ -49,6 +59,34 @@ describe('formatPartialDate', () => {
         day: 9
       })
     ).toBe('09.05.2001')
+  })
+
+  it('formats year-only date with circa prefix', () => {
+    expect(
+      formatPartialDate({
+        precision: 'circa',
+        year: 1890
+      })
+    ).toBe('ок..1890')
+  })
+
+  it('formats month precision without day', () => {
+    expect(
+      formatPartialDate({
+        precision: 'month',
+        year: 1920,
+        month: 11
+      })
+    ).toBe('11.1920')
+  })
+
+  it('formats before prefix', () => {
+    expect(
+      formatPartialDate({
+        precision: 'before',
+        year: 1917
+      })
+    ).toBe('до.1917')
   })
 
   it('returns em dash when empty', () => {

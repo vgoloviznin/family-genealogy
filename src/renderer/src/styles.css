@@ -24,3 +24,22 @@ select,
 textarea {
   font: inherit;
 }
+
+.react-flow__handle {
+  width: 8px;
+  height: 8px;
+  background: transparent;
+  border: none;
+}
+
+.react-flow__node-person {
+  overflow: visible;
+}
+
+.react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.react-flow__attribution {
+  display: none;
+}

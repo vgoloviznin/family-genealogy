@@ -30,10 +30,10 @@ export function PlaceField({ label, value, onChange }: Props) {
 
   return (
     <div className="relative" ref={boxRef}>
-      <label className="text-sm block">
+      <label className="text-sm font-medium text-stone-700 block">
         {label ?? 'Место'}
         <input
-          className="w-full border rounded px-2 py-1 mt-1"
+          className="w-full border border-stone-300 rounded-md px-2 py-1.5 mt-1 bg-stone-50"
           value={value}
           onChange={(e) => {
             onChange(e.target.value)

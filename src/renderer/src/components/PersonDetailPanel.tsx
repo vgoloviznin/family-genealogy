@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   PersonDetail,
@@ -15,6 +15,7 @@ import type {
 } from '@shared/types'
 import { DateFields } from './DateFields'
 import { PlaceField } from './PlaceField'
+import { PersonAvatar } from './PersonAvatar'
 import {
   personLabel,
   formatDate,
@@ -370,11 +371,7 @@ export function PersonDetailPanel({
     <div className="flex flex-col h-full bg-white rounded-lg border border-stone-200 overflow-hidden">
       <div className="p-4 border-b border-stone-100">
         <div className="flex items-start gap-3">
-          {person.thumbUrl ? (
-            <img src={person.thumbUrl} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
-          ) : (
-            <div className="w-12 h-12 rounded-lg bg-stone-100 shrink-0" />
-          )}
+          <PersonAvatar personId={person.id} thumbUrl={person.thumbUrl} onUpdated={onRefresh} />
           <div className="flex-1 min-w-0">
             <h2 className="text-xl font-serif">{personLabel(person)}</h2>
             <p className="text-sm text-stone-500 mt-1">{formatLifeSpan(person)}</p>
@@ -385,9 +382,7 @@ export function PersonDetailPanel({
           {dirty && (
             <span className="text-xs text-amber-700 shrink-0">не сохранено</span>
           )}
-          <button className="text-xs text-red-600 shrink-0" onClick={() => void handleDeletePerson()}>
-            {t('delete')}
-          </button>
+          <DangerBtn label={t('delete')} onClick={() => void handleDeletePerson()} />
         </div>
         <div className="flex gap-1 mt-3 flex-wrap">
           {tabs.map(([key, label, count]) => (
@@ -419,10 +414,10 @@ export function PersonDetailPanel({
               {showMaidenName && (
                 <Field label={t('maidenName')} value={form.maidenName} onChange={(v) => setForm({ ...form, maidenName: v })} />
               )}
-              <label className="text-sm">
+              <label className="text-sm font-medium text-stone-700">
                 {t('sex')}
                 <select
-                  className="w-full border rounded px-2 py-1 mt-1"
+                  className="w-full border border-stone-300 rounded-md px-2 py-1.5 mt-1 bg-stone-50 font-normal text-stone-900"
                   value={form.sex}
                   onChange={(e) => setForm({ ...form, sex: e.target.value as typeof form.sex })}
                 >
@@ -457,10 +452,10 @@ export function PersonDetailPanel({
                 <DateFields label={t('death')} value={form.deathDate} onChange={(d) => setForm({ ...form, deathDate: d })} />
               </>
             )}
-            <label className="block text-sm">
+            <label className="block text-sm font-medium text-stone-700">
               {t('notes')}
               <textarea
-                className="w-full border rounded px-2 py-1 mt-1 min-h-[80px]"
+                className="w-full border border-stone-300 rounded-md px-2 py-1.5 mt-1 min-h-[80px] bg-stone-50 font-normal text-stone-900"
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
@@ -534,11 +529,11 @@ export function PersonDetailPanel({
                 const siblings = f.children.filter((c) => c.person.id !== person.id)
                 const children = isChildHere ? [] : f.children
                 return (
-                <div key={f.id} className="border rounded-lg p-3 space-y-3">
-                  <label className="text-sm flex items-center gap-2">
+                <div key={f.id} className="border border-stone-300 rounded-xl p-3 space-y-3 bg-white shadow-sm">
+                  <label className="text-sm font-medium text-stone-700 flex items-center gap-2">
                     {isChildHere ? 'Семья родителей' : 'Тип союза'}
                     <select
-                      className="border rounded px-2 py-1"
+                      className="border border-stone-300 rounded-md px-2 py-1 bg-stone-50 font-normal"
                       value={f.unionType}
                       onChange={(e) => void window.api.family.setUnionType(f.id, e.target.value as UnionType).then(onRefresh)}
                     >
@@ -549,33 +544,26 @@ export function PersonDetailPanel({
                       ))}
                     </select>
                   </label>
-                  <div className="space-y-1">
-                    <div className="text-xs text-stone-500">{isChildHere ? 'Родители' : 'Супруги'}</div>
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-medium uppercase tracking-wide text-stone-500">{isChildHere ? 'Родители' : 'Супруги'}</div>
                     {(isChildHere ? f.partners : spouses).length === 0 && <span className="text-sm text-stone-400">—</span>}
                     {(isChildHere ? f.partners : spouses).map((p) => (
-                      <div key={p.id} className="flex items-center gap-2 text-sm">
-                        <span className="text-xs text-stone-400 w-20 shrink-0">
-                          {isChildHere ? 'Родитель' : spouseLabel(p.sex)}
-                        </span>
-                        <button className="underline" onClick={() => onSelectPerson(p.id)}>
-                          {personLabel(p)}
-                        </button>
-                        <button
-                          className="text-xs text-red-600"
-                          onClick={() => {
-                            void window.api.undo
-                              .push({ type: 'family-relink-partner', familyId: f.id, personId: p.id })
-                              .then(() => window.api.family.unlinkPartner(f.id, p.id))
-                              .then(onRefresh)
-                          }}
-                        >
-                          отвязать
-                        </button>
-                      </div>
+                      <RelRow
+                        key={p.id}
+                        role={isChildHere ? 'Родитель' : spouseLabel(p.sex)}
+                        person={p}
+                        onOpen={() => onSelectPerson(p.id)}
+                        onUnlink={() => {
+                          void window.api.undo
+                            .push({ type: 'family-relink-partner', familyId: f.id, personId: p.id })
+                            .then(() => window.api.family.unlinkPartner(f.id, p.id))
+                            .then(onRefresh)
+                        }}
+                      />
                     ))}
                     {(isChildHere ? f.partners.length < 2 : f.partners.length < 2) && (
                       <select
-                        className="border rounded px-2 py-1 text-sm mt-1"
+                        className="border border-stone-300 rounded-md px-2 py-1.5 text-sm mt-1 bg-stone-50"
                         defaultValue=""
                         onChange={(e) => {
                           const id = e.target.value
@@ -595,43 +583,40 @@ export function PersonDetailPanel({
                     )}
                   </div>
                   {isChildHere && (
-                    <div className="space-y-1">
-                      <div className="text-xs text-stone-500">Братья и сёстры</div>
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-medium uppercase tracking-wide text-stone-500">Братья и сёстры</div>
                       {siblings.length === 0 && <span className="text-sm text-stone-400">—</span>}
                       {siblings.map(({ person: c, pedigree }) => (
-                        <div key={c.id} className="flex items-center gap-2 text-sm flex-wrap">
-                          <span className="text-xs text-stone-400 w-20 shrink-0">{siblingLabel(c.sex)}</span>
-                          <button className="underline" onClick={() => onSelectPerson(c.id)}>
-                            {personLabel(c)}
-                          </button>
-                          <select
-                            className="border rounded px-1 py-0.5 text-xs"
-                            value={pedigree}
-                            onChange={(e) =>
-                              void window.api.family.setPedigree(f.id, c.id, e.target.value as PedigreeType).then(onRefresh)
-                            }
-                          >
-                            {Object.entries(PEDIGREE_LABELS).map(([k, v]) => (
-                              <option key={k} value={k}>
-                                {v}
-                              </option>
-                            ))}
-                          </select>
-                          <button
-                            className="text-xs text-red-600"
-                            onClick={() => {
-                              void window.api.undo
-                                .push({ type: 'family-relink-child', familyId: f.id, personId: c.id, pedigree })
-                                .then(() => window.api.family.unlinkChild(f.id, c.id))
-                                .then(onRefresh)
-                            }}
-                          >
-                            отвязать
-                          </button>
-                        </div>
+                        <RelRow
+                          key={c.id}
+                          role={siblingLabel(c.sex)}
+                          person={c}
+                          onOpen={() => onSelectPerson(c.id)}
+                          extra={
+                            <select
+                              className="border border-stone-300 rounded-md px-1.5 py-0.5 text-xs bg-white"
+                              value={pedigree}
+                              onChange={(e) =>
+                                void window.api.family.setPedigree(f.id, c.id, e.target.value as PedigreeType).then(onRefresh)
+                              }
+                            >
+                              {Object.entries(PEDIGREE_LABELS).map(([k, v]) => (
+                                <option key={k} value={k}>
+                                  {v}
+                                </option>
+                              ))}
+                            </select>
+                          }
+                          onUnlink={() => {
+                            void window.api.undo
+                              .push({ type: 'family-relink-child', familyId: f.id, personId: c.id, pedigree })
+                              .then(() => window.api.family.unlinkChild(f.id, c.id))
+                              .then(onRefresh)
+                          }}
+                        />
                       ))}
                       <select
-                        className="border rounded px-2 py-1 text-sm mt-1"
+                        className="border border-stone-300 rounded-md px-2 py-1.5 text-sm mt-1 bg-stone-50"
                         defaultValue=""
                         onChange={(e) => {
                           const id = e.target.value
@@ -651,42 +636,39 @@ export function PersonDetailPanel({
                     </div>
                   )}
                   {!isChildHere && (
-                  <div className="space-y-1">
-                    <div className="text-xs text-stone-500">Дети</div>
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-medium uppercase tracking-wide text-stone-500">Дети</div>
                     {children.length === 0 && <span className="text-sm text-stone-400">—</span>}
                     {children.map(({ person: c, pedigree }) => (
-                      <div key={c.id} className="flex items-center gap-2 text-sm flex-wrap">
-                        <button className="underline" onClick={() => onSelectPerson(c.id)}>
-                          {personLabel(c)}
-                        </button>
-                        <select
-                          className="border rounded px-1 py-0.5 text-xs"
-                          value={pedigree}
-                          onChange={(e) =>
-                            void window.api.family.setPedigree(f.id, c.id, e.target.value as PedigreeType).then(onRefresh)
-                          }
-                        >
-                          {Object.entries(PEDIGREE_LABELS).map(([k, v]) => (
-                            <option key={k} value={k}>
-                              {v}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          className="text-xs text-red-600"
-                          onClick={() => {
-                            void window.api.undo
-                              .push({ type: 'family-relink-child', familyId: f.id, personId: c.id, pedigree })
-                              .then(() => window.api.family.unlinkChild(f.id, c.id))
-                              .then(onRefresh)
-                          }}
-                        >
-                          отвязать
-                        </button>
-                      </div>
+                      <RelRow
+                        key={c.id}
+                        person={c}
+                        onOpen={() => onSelectPerson(c.id)}
+                        extra={
+                          <select
+                            className="border border-stone-300 rounded-md px-1.5 py-0.5 text-xs bg-white"
+                            value={pedigree}
+                            onChange={(e) =>
+                              void window.api.family.setPedigree(f.id, c.id, e.target.value as PedigreeType).then(onRefresh)
+                            }
+                          >
+                            {Object.entries(PEDIGREE_LABELS).map(([k, v]) => (
+                              <option key={k} value={k}>
+                                {v}
+                              </option>
+                            ))}
+                          </select>
+                        }
+                        onUnlink={() => {
+                          void window.api.undo
+                            .push({ type: 'family-relink-child', familyId: f.id, personId: c.id, pedigree })
+                            .then(() => window.api.family.unlinkChild(f.id, c.id))
+                            .then(onRefresh)
+                        }}
+                      />
                     ))}
                     <select
-                      className="border rounded px-2 py-1 text-sm mt-1"
+                      className="border border-stone-300 rounded-md px-2 py-1.5 text-sm mt-1 bg-stone-50"
                       defaultValue=""
                       onChange={(e) => {
                         const id = e.target.value
@@ -771,31 +753,27 @@ export function PersonDetailPanel({
             ) : (
               <ul className="space-y-2">
                 {allEvents.map((ev) => (
-                  <li key={ev.id} className="border rounded p-2 text-sm">
+                  <li key={ev.id} className="border border-stone-300 rounded-lg p-2.5 text-sm bg-stone-50">
                     <div className="flex justify-between gap-2">
-                      <strong>{EVENT_TYPE_LABELS[ev.type] ?? ev.customLabel ?? ev.type}</strong>
-                      <div className="flex gap-2 shrink-0">
-                        <button
-                          className="text-xs underline"
+                      <strong className="text-stone-900">{EVENT_TYPE_LABELS[ev.type] ?? ev.customLabel ?? ev.type}</strong>
+                      <div className="flex gap-1.5 shrink-0">
+                        <GhostBtn
+                          label="Изменить"
                           onClick={() => {
                             setEventDraft(snapshotEvent(ev))
                             setEditingEventId(ev.id)
                           }}
-                        >
-                          Изменить
-                        </button>
+                        />
                         {ev.type !== 'birth' && (
-                          <button className="text-xs text-red-600" onClick={() => void deleteEvent(ev)}>
-                            {t('delete')}
-                          </button>
+                          <DangerBtn label={t('delete')} onClick={() => void deleteEvent(ev)} />
                         )}
                       </div>
                     </div>
-                    <div className="text-stone-600">
+                    <div className="text-stone-800 mt-1 font-medium">
                       {formatDate(ev.date)}
                       {ev.placeName ? ` · ${ev.placeName}` : ''}
                     </div>
-                    {ev.description && <div className="text-stone-500">{ev.description}</div>}
+                    {ev.description && <div className="text-stone-600 mt-0.5">{ev.description}</div>}
                   </li>
                 ))}
               </ul>
@@ -858,16 +836,15 @@ export function PersonDetailPanel({
             ) : person.associations.length > 0 ? (
               <ul className="space-y-2">
                 {person.associations.map((a) => (
-                  <li key={a.id} className="border rounded p-2 text-sm flex justify-between gap-2">
+                  <li key={a.id} className="border border-stone-300 rounded-lg p-2.5 text-sm flex justify-between gap-2 bg-stone-50 items-center">
                     <span>
-                      {ASSOCIATION_LABELS[a.role] ?? a.customRole}:{' '}
-                      <button className="underline" onClick={() => onSelectPerson(a.toPerson.id)}>
+                      <span className="text-xs font-medium text-stone-500">{ASSOCIATION_LABELS[a.role] ?? a.customRole}</span>
+                      {': '}
+                      <button className="font-semibold text-stone-900 hover:underline" onClick={() => onSelectPerson(a.toPerson.id)}>
                         {personLabel(a.toPerson)}
                       </button>
                     </span>
-                    <button className="text-red-600 text-xs shrink-0" onClick={() => void window.api.associations.delete(a.id).then(onRefresh)}>
-                      {t('delete')}
-                    </button>
+                    <DangerBtn label={t('delete')} onClick={() => void window.api.associations.delete(a.id).then(onRefresh)} />
                   </li>
                 ))}
               </ul>
@@ -883,30 +860,24 @@ export function PersonDetailPanel({
             ) : (
               <div className="grid grid-cols-3 gap-2">
                 {person.media.map((m) => (
-                  <div key={m.id} className="border rounded p-2 text-center">
+                  <div key={m.id} className="border border-stone-300 rounded-lg p-2 text-center bg-stone-50">
                     {m.thumbUrl ? (
                       <img src={m.thumbUrl} alt="" className="w-full h-24 object-cover rounded mb-1" />
                     ) : (
                       <div className="h-24 bg-stone-100 flex items-center justify-center text-xs">{m.fileName}</div>
                     )}
-                    <div className="text-xs truncate">{m.fileName}</div>
-                    <div className="flex gap-1 justify-center mt-1 flex-wrap">
-                      <button className="text-xs underline" onClick={() => void window.api.media.open(m.id)}>
-                        Открыть
-                      </button>
+                    <div className="text-xs font-medium truncate text-stone-900">{m.fileName}</div>
+                    <div className="flex gap-1 justify-center mt-1.5 flex-wrap">
+                      <GhostBtn label="Открыть" onClick={() => void window.api.media.open(m.id)} />
                       {!m.isPrimary && (
-                        <button className="text-xs underline" onClick={() => void window.api.media.setPrimary(person.id, m.id).then(onRefresh)}>
-                          Главное
-                        </button>
+                        <GhostBtn label="Главное" onClick={() => void window.api.media.setPrimary(person.id, m.id).then(onRefresh)} />
                       )}
-                      <button
-                        className="text-xs text-red-600"
+                      <DangerBtn
+                        label={t('delete')}
                         onClick={() => {
                           if (window.confirm('Удалить файл из проекта?')) void window.api.media.delete(m.id).then(onRefresh)
                         }}
-                      >
-                        {t('delete')}
-                      </button>
+                      />
                     </div>
                   </div>
                 ))}
@@ -978,31 +949,29 @@ export function PersonDetailPanel({
             ) : (
               <ul className="space-y-2">
                 {person.citations.map((c) => (
-                  <li key={c.id} className="border rounded p-2 text-sm">
+                  <li key={c.id} className="border border-stone-300 rounded-lg p-2.5 text-sm bg-stone-50">
                     <div className="flex justify-between gap-2">
                       <div>
-                        <strong>{c.source.title}</strong>
-                        <span className="text-stone-500"> · {SOURCE_TYPE_LABELS[c.source.type] ?? c.source.type}</span>
-                        {c.page && <div className="text-stone-600">стр. {c.page}</div>}
-                        {c.excerpt && <div className="text-stone-500 italic">{c.excerpt}</div>}
+                        <strong className="text-stone-900">{c.source.title}</strong>
+                        <span className="text-stone-600"> · {SOURCE_TYPE_LABELS[c.source.type] ?? c.source.type}</span>
+                        {c.page && <div className="text-stone-800 font-medium">стр. {c.page}</div>}
+                        {c.excerpt && <div className="text-stone-600 italic">{c.excerpt}</div>}
                         {c.eventId && (
-                          <div className="text-xs text-stone-400">
+                          <div className="text-xs text-stone-500 mt-0.5">
                             к событию:{' '}
                             {EVENT_TYPE_LABELS[allEvents.find((e) => e.id === c.eventId)?.type ?? ''] ?? 'событие'}
                           </div>
                         )}
                       </div>
-                      <button
-                        className="text-xs text-red-600 shrink-0"
+                      <DangerBtn
+                        label={t('delete')}
                         onClick={() => {
                           void window.api.undo
                             .push({ type: 'citation-restore', id: c.id })
                             .then(() => window.api.citations.delete(c.id))
                             .then(onRefresh)
                         }}
-                      >
-                        {t('delete')}
-                      </button>
+                      />
                     </div>
                   </li>
                 ))}
@@ -1027,10 +996,10 @@ function Field({
   onChange: (v: string) => void
 }) {
   return (
-    <label className="text-sm block">
+    <label className="text-sm font-medium text-stone-700 block">
       {label}
       <input
-        className="w-full border rounded px-2 py-1 mt-1"
+        className="w-full border border-stone-300 rounded-md px-2 py-1.5 mt-1 bg-stone-50 font-normal text-stone-900"
         value={value}
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
@@ -1048,6 +1017,65 @@ function ActionBtn({ label, onClick, disabled }: { label: string; onClick: () =>
     >
       {label}
     </button>
+  )
+}
+
+function GhostBtn({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="text-xs border border-stone-300 text-stone-700 rounded-md px-2 py-0.5 hover:bg-white shrink-0"
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  )
+}
+
+function DangerBtn({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="text-xs border border-red-300 text-red-700 rounded-md px-2 py-0.5 hover:bg-red-50 shrink-0"
+      onClick={onClick}
+    >
+      {label}
+    </button>
+  )
+}
+
+function RelRow({
+  role,
+  person,
+  onOpen,
+  extra,
+  onUnlink
+}: {
+  role?: string
+  person: {
+    firstName: string
+    lastName: string
+    middleName?: string | null
+    isLiving: boolean
+    birthYear?: number | null
+    deathYear?: number | null
+  }
+  onOpen: () => void
+  extra?: ReactNode
+  onUnlink: () => void
+}) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap rounded-lg border border-stone-300 bg-stone-50 px-2.5 py-1.5">
+      {role && <span className="text-xs font-medium text-stone-500 w-[4.75rem] shrink-0">{role}</span>}
+      <button type="button" className="font-semibold text-stone-900 hover:underline text-left min-w-0 truncate" onClick={onOpen}>
+        {personLabel(person)}
+      </button>
+      <span className="text-xs text-stone-600 shrink-0">{formatLifeSpan(person)}</span>
+      {extra}
+      <span className="ml-auto">
+        <DangerBtn label="отвязать" onClick={onUnlink} />
+      </span>
+    </div>
   )
 }
 
