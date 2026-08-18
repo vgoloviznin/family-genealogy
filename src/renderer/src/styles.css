@@ -25,21 +25,35 @@ textarea {
   font: inherit;
 }
 
-.react-flow__handle {
-  width: 8px;
-  height: 8px;
-  background: transparent;
-  border: none;
-}
-
 .react-flow__node-person {
   overflow: visible;
 }
 
 .react-flow__edge-path {
-  stroke-linecap: round;
+  stroke-linecap: square;
 }
 
 .react-flow__attribution {
   display: none;
+}
+
+.tree-view .react-flow__controls.tree-controls {
+  border: 1px solid #d6d3d1;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 2px rgb(28 25 23 / 0.06);
+  overflow: hidden;
+}
+
+.tree-view .react-flow__controls.tree-controls button {
+  background: #fff;
+  border-bottom: 1px solid #e7e5e4;
+  color: #57534e;
+}
+
+.tree-view .react-flow__controls.tree-controls button:hover {
+  background: #fafaf9;
+}
+
+.tree-view .react-flow__controls.tree-controls button:last-child {
+  border-bottom: none;
 }

@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   assignLayoutGenerations,
   buildFamilyConnectors,
+  compactNameLines,
+  estimatePedigreeCardWidth,
   familyConnectorPath,
   layoutPedigreeTree,
   partnerLineCoords,
   standalonePartnerPairs,
   PEDIGREE_NODE_H,
+  PEDIGREE_NODE_MIN_W,
   type TreeFamily
 } from './tree-layout'
 
@@ -21,6 +24,20 @@ const valfreFamily: TreeFamily = {
   partners: ['davide'],
   children: ['diana', 'sabina']
 }
+
+describe('estimatePedigreeCardWidth', () => {
+  it('uses minimum width for short names', () => {
+    const width = estimatePedigreeCardWidth(compactNameLines({ firstName: 'Иван', lastName: 'И.', middleName: null }))
+    expect(width).toBe(PEDIGREE_NODE_MIN_W)
+  })
+
+  it('widens cards for long given names', () => {
+    const width = estimatePedigreeCardWidth(
+      compactNameLines({ firstName: 'Всеволод', lastName: 'Головизнин', middleName: 'Александрович' })
+    )
+    expect(width).toBeGreaterThan(PEDIGREE_NODE_MIN_W)
+  })
+})
 
 describe('assignLayoutGenerations', () => {
   it('places children one row below parents', () => {
@@ -140,7 +157,7 @@ describe('layoutPedigreeTree', () => {
   it('draws partner line coords between spouse cards', () => {
     const left = { x: 0, y: 150 }
     const right = { x: 300, y: 150 }
-    const line = partnerLineCoords(left, right)
+    const line = partnerLineCoords(left, right, 148, 148)
     expect(line.x1).toBeLessThan(line.x2)
     expect(line.y1).toBe(line.y2)
   })

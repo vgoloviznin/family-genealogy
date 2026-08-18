@@ -1,11 +1,66 @@
 import { assignGenerationsFromFocus } from './tree-graph'
 
-export const PEDIGREE_NODE_W = 210
-export const PEDIGREE_NODE_H = 150
-export const PEDIGREE_CARD_H = 64
-export const PEDIGREE_COUPLE_GAP = 40
-export const PEDIGREE_SIBLING_GAP = 56
-export const PEDIGREE_FAMILY_GAP = 120
+export const PEDIGREE_NODE_MIN_W = 148
+export const PEDIGREE_NODE_MAX_W = 320
+/** @deprecated use PEDIGREE_NODE_MIN_W */
+export const PEDIGREE_NODE_W = PEDIGREE_NODE_MIN_W
+export const PEDIGREE_NODE_H = 96
+export const PEDIGREE_CARD_H = 52
+export const PEDIGREE_COUPLE_GAP = 28
+export const PEDIGREE_SIBLING_GAP = 40
+export const PEDIGREE_FAMILY_GAP = 80
+
+const CARD_CHROME_W = 56 // avatar 32 + gap 8 + padding 16
+const CHAR_W_PRIMARY = 7
+const CHAR_W_SECONDARY = 6.5
+
+export interface PersonNameLines {
+  primary: string
+  secondary: string | null
+}
+
+export function compactNameLines(person: {
+  firstName: string
+  lastName: string
+  middleName?: string | null
+}): PersonNameLines {
+  const last = person.lastName.trim()
+  const given = [person.firstName, person.middleName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' ')
+  if (last && given) return { primary: last, secondary: given }
+  if (last) return { primary: last, secondary: null }
+  if (given) return { primary: given, secondary: null }
+  const full = [last, person.firstName, person.middleName].filter(Boolean).join(' ').trim()
+  return { primary: full || 'Новый человек', secondary: null }
+}
+
+export function estimatePedigreeCardWidth(lines: PersonNameLines): number {
+  const primaryW = lines.primary.length * CHAR_W_PRIMARY
+  const secondaryW = lines.secondary ? lines.secondary.length * CHAR_W_SECONDARY : 0
+  const textW = Math.max(primaryW, secondaryW)
+  return Math.min(PEDIGREE_NODE_MAX_W, Math.max(PEDIGREE_NODE_MIN_W, Math.ceil(textW + CARD_CHROME_W)))
+}
+
+export function buildPedigreeNodeWidths(
+  people: Array<{ id: string; firstName: string; lastName: string; middleName?: string | null }>
+): Map<string, number> {
+  const widths = new Map<string, number>()
+  for (const person of people) {
+    widths.set(person.id, estimatePedigreeCardWidth(compactNameLines(person)))
+  }
+  return widths
+}
+
+function nodeWidth(id: string, nodeWidths: Map<string, number>): number {
+  return nodeWidths.get(id) ?? PEDIGREE_NODE_MIN_W
+}
+
+function coupleWidthForIds(ids: string[], nodeWidths: Map<string, number>): number {
+  if (ids.length === 0) return PEDIGREE_NODE_MIN_W
+  return ids.reduce((sum, id, i) => sum + nodeWidth(id, nodeWidths) + (i > 0 ? PEDIGREE_COUPLE_GAP : 0), 0)
+}
 
 export interface TreeFamily {
   id: string
@@ -18,6 +73,7 @@ export interface PedigreeLayoutInput {
   focusId?: string
   families: TreeFamily[]
   partnerPairs: Array<[string, string]>
+  nodeWidths?: Map<string, number>
 }
 
 function parentPairsFromFamilies(families: TreeFamily[]): Array<[string, string]> {
@@ -36,11 +92,6 @@ function partnerAt(id: string, generation: number, partnerPairs: Array<[string, 
     if (b === id && generations.get(a) === generation) return a
   }
   return null
-}
-
-function coupleWidth(count: number): number {
-  if (count <= 1) return PEDIGREE_NODE_W
-  return count * PEDIGREE_NODE_W + (count - 1) * PEDIGREE_COUPLE_GAP
 }
 
 /** Поколения: от фокуса, дети строго ниже родителей, супруги в одном ряду */
@@ -96,6 +147,7 @@ function measureChildSlot(
   partnerPairs: Array<[string, string]>,
   families: TreeFamily[],
   widths: Map<string, number>,
+  nodeWidths: Map<string, number>,
   measuring: Set<string>
 ): number {
   const cached = widths.get(`child:${childId}`)
@@ -103,14 +155,16 @@ function measureChildSlot(
 
   const gen = generations.get(childId) ?? 0
   const spouse = partnerAt(childId, gen, partnerPairs, generations)
-  let width = spouse ? coupleWidth(2) : PEDIGREE_NODE_W
+  let width = spouse
+    ? nodeWidth(childId, nodeWidths) + PEDIGREE_COUPLE_GAP + nodeWidth(spouse, nodeWidths)
+    : nodeWidth(childId, nodeWidths)
 
   for (const family of partnerFamilies(childId, families)) {
-    width = Math.max(width, measureFamily(family, generations, partnerPairs, families, widths, measuring))
+    width = Math.max(width, measureFamily(family, generations, partnerPairs, families, widths, nodeWidths, measuring))
   }
   if (spouse) {
     for (const family of partnerFamilies(spouse, families)) {
-      width = Math.max(width, measureFamily(family, generations, partnerPairs, families, widths, measuring))
+      width = Math.max(width, measureFamily(family, generations, partnerPairs, families, widths, nodeWidths, measuring))
     }
   }
 
@@ -124,13 +178,14 @@ function measureFamily(
   partnerPairs: Array<[string, string]>,
   families: TreeFamily[],
   widths: Map<string, number>,
+  nodeWidths: Map<string, number>,
   measuring: Set<string>
 ): number {
   if (widths.has(family.id)) return widths.get(family.id)!
-  if (measuring.has(family.id)) return coupleWidth(Math.max(family.partners.length, 1))
+  if (measuring.has(family.id)) return coupleWidthForIds(family.partners, nodeWidths)
   measuring.add(family.id)
 
-  const partnerRow = coupleWidth(Math.max(family.partners.length, 1))
+  const partnerRow = coupleWidthForIds(family.partners, nodeWidths)
   if (family.children.length === 0) {
     widths.set(family.id, partnerRow)
     measuring.delete(family.id)
@@ -139,7 +194,7 @@ function measureFamily(
 
   let childrenRow = 0
   for (let i = 0; i < family.children.length; i++) {
-    childrenRow += measureChildSlot(family.children[i], generations, partnerPairs, families, widths, measuring)
+    childrenRow += measureChildSlot(family.children[i], generations, partnerPairs, families, widths, nodeWidths, measuring)
     if (i > 0) childrenRow += PEDIGREE_SIBLING_GAP
   }
 
@@ -149,28 +204,42 @@ function measureFamily(
   return width
 }
 
-function placePartnerRow(partners: string[], centerX: number, y: number, positions: Map<string, { x: number; y: number }>, placed: Set<string>) {
-  const rowWidth = coupleWidth(Math.max(partners.length, 1))
-  let x = centerX - rowWidth / 2 + PEDIGREE_NODE_W / 2
+function placePartnerRow(
+  partners: string[],
+  centerX: number,
+  y: number,
+  positions: Map<string, { x: number; y: number }>,
+  placed: Set<string>,
+  nodeWidths: Map<string, number>
+) {
+  const rowWidth = coupleWidthForIds(partners, nodeWidths)
+  let x = centerX - rowWidth / 2
   for (const id of partners) {
-    positions.set(id, { x, y })
+    const w = nodeWidth(id, nodeWidths)
+    positions.set(id, { x: x + w / 2, y })
     placed.add(id)
-    x += PEDIGREE_NODE_W + PEDIGREE_COUPLE_GAP
+    x += w + PEDIGREE_COUPLE_GAP
   }
 }
 
-function centerPartnersAboveChildren(family: TreeFamily, positions: Map<string, { x: number; y: number }>, generations: Map<string, number>) {
+function centerPartnersAboveChildren(
+  family: TreeFamily,
+  positions: Map<string, { x: number; y: number }>,
+  generations: Map<string, number>,
+  nodeWidths: Map<string, number>
+) {
   const childXs = family.children.map((id) => positions.get(id)?.x).filter((x): x is number => x != null)
   if (childXs.length === 0 || family.partners.length === 0) return
 
   const midX = (Math.min(...childXs) + Math.max(...childXs)) / 2
   const gen = Math.min(...family.partners.map((p) => generations.get(p) ?? 0))
   const y = gen * PEDIGREE_NODE_H
-  const rowWidth = coupleWidth(family.partners.length)
-  let x = midX - rowWidth / 2 + PEDIGREE_NODE_W / 2
+  const rowWidth = coupleWidthForIds(family.partners, nodeWidths)
+  let x = midX - rowWidth / 2
   for (const id of family.partners) {
-    positions.set(id, { x, y })
-    x += PEDIGREE_NODE_W + PEDIGREE_COUPLE_GAP
+    const w = nodeWidth(id, nodeWidths)
+    positions.set(id, { x: x + w / 2, y })
+    x += w + PEDIGREE_COUPLE_GAP
   }
 }
 
@@ -182,7 +251,8 @@ function placeChild(
   families: TreeFamily[],
   positions: Map<string, { x: number; y: number }>,
   placed: Set<string>,
-  widths: Map<string, number>
+  widths: Map<string, number>,
+  nodeWidths: Map<string, number>
 ) {
   const gen = generations.get(childId) ?? 0
   const y = gen * PEDIGREE_NODE_H
@@ -190,9 +260,11 @@ function placeChild(
 
   if (!placed.has(childId)) {
     if (spouse && !placed.has(spouse)) {
-      const rowWidth = coupleWidth(2)
-      positions.set(childId, { x: centerX - rowWidth / 2 + PEDIGREE_NODE_W / 2, y })
-      positions.set(spouse, { x: centerX + rowWidth / 2 - PEDIGREE_NODE_W / 2, y })
+      const w1 = nodeWidth(childId, nodeWidths)
+      const w2 = nodeWidth(spouse, nodeWidths)
+      const rowWidth = w1 + PEDIGREE_COUPLE_GAP + w2
+      positions.set(childId, { x: centerX - rowWidth / 2 + w1 / 2, y })
+      positions.set(spouse, { x: centerX + rowWidth / 2 - w2 / 2, y })
       placed.add(childId)
       placed.add(spouse)
     } else {
@@ -207,7 +279,7 @@ function placeChild(
     for (const family of partnerFamilies(member, families)) {
       if (seen.has(family.id)) continue
       seen.add(family.id)
-      placeFamily(family, centerX, generations, partnerPairs, families, positions, placed, widths)
+      placeFamily(family, centerX, generations, partnerPairs, families, positions, placed, widths, nodeWidths)
     }
   }
 }
@@ -220,31 +292,34 @@ function placeFamily(
   families: TreeFamily[],
   positions: Map<string, { x: number; y: number }>,
   placed: Set<string>,
-  widths: Map<string, number>
+  widths: Map<string, number>,
+  nodeWidths: Map<string, number>
 ) {
   const gen = Math.min(...family.partners.map((p) => generations.get(p) ?? 0))
-  placePartnerRow(family.partners, centerX, gen * PEDIGREE_NODE_H, positions, placed)
+  placePartnerRow(family.partners, centerX, gen * PEDIGREE_NODE_H, positions, placed, nodeWidths)
 
   if (family.children.length === 0) return
 
-  const childGen = gen + 1
-  const childWidths = family.children.map((childId) => widths.get(`child:${childId}`) ?? measureChildSlot(childId, generations, partnerPairs, families, widths, new Set()))
+  const childWidths = family.children.map(
+    (childId) => widths.get(`child:${childId}`) ?? measureChildSlot(childId, generations, partnerPairs, families, widths, nodeWidths, new Set())
+  )
   const totalWidth = childWidths.reduce((sum, w, i) => sum + w + (i > 0 ? PEDIGREE_SIBLING_GAP : 0), 0)
   let cursor = centerX - totalWidth / 2
 
   for (let i = 0; i < family.children.length; i++) {
     const childId = family.children[i]
     const slotW = childWidths[i]
-    placeChild(childId, cursor + slotW / 2, generations, partnerPairs, families, positions, placed, widths)
+    placeChild(childId, cursor + slotW / 2, generations, partnerPairs, families, positions, placed, widths, nodeWidths)
     cursor += slotW + PEDIGREE_SIBLING_GAP
   }
 
-  centerPartnersAboveChildren(family, positions, generations)
+  centerPartnersAboveChildren(family, positions, generations, nodeWidths)
 }
 
 export function layoutPedigreeTree(input: PedigreeLayoutInput): Map<string, { x: number; y: number }> {
   const parentPairs = parentPairsFromFamilies(input.families)
   const generations = assignLayoutGenerations(input.nodeIds, parentPairs, input.partnerPairs, input.focusId)
+  const nodeWidths = input.nodeWidths ?? new Map<string, number>()
   const widths = new Map<string, number>()
   const positions = new Map<string, { x: number; y: number }>()
   const placed = new Set<string>()
@@ -258,16 +333,17 @@ export function layoutPedigreeTree(input: PedigreeLayoutInput): Map<string, { x:
 
   let cursor = 0
   for (const family of sortedRoots) {
-    const width = measureFamily(family, generations, input.partnerPairs, input.families, widths, new Set())
-    placeFamily(family, cursor + width / 2, generations, input.partnerPairs, input.families, positions, placed, widths)
+    const width = measureFamily(family, generations, input.partnerPairs, input.families, widths, nodeWidths, new Set())
+    placeFamily(family, cursor + width / 2, generations, input.partnerPairs, input.families, positions, placed, widths, nodeWidths)
     cursor += width + PEDIGREE_FAMILY_GAP
   }
 
   for (const id of input.nodeIds) {
     if (placed.has(id)) continue
-    positions.set(id, { x: cursor, y: (generations.get(id) ?? 0) * PEDIGREE_NODE_H })
+    const w = nodeWidth(id, nodeWidths)
+    positions.set(id, { x: cursor + w / 2, y: (generations.get(id) ?? 0) * PEDIGREE_NODE_H })
     placed.add(id)
-    cursor += PEDIGREE_NODE_W + PEDIGREE_FAMILY_GAP
+    cursor += w + PEDIGREE_FAMILY_GAP
   }
 
   if (positions.size > 0) {
@@ -384,15 +460,19 @@ export function standalonePartnerPairs(
 
 export function partnerLineCoords(
   a: { x: number; y: number },
-  b: { x: number; y: number }
+  b: { x: number; y: number },
+  widthA: number,
+  widthB: number
 ): { x1: number; y1: number; x2: number; y2: number } {
   const left = a.x <= b.x ? a : b
   const right = a.x <= b.x ? b : a
+  const leftW = a.x <= b.x ? widthA : widthB
+  const rightW = a.x <= b.x ? widthB : widthA
   const y = Math.min(left.y, right.y) + PEDIGREE_CARD_H / 2
   return {
-    x1: left.x + PEDIGREE_NODE_W / 2,
+    x1: left.x + leftW / 2,
     y1: y,
-    x2: right.x - PEDIGREE_NODE_W / 2,
+    x2: right.x - rightW / 2,
     y2: y
   }
 }

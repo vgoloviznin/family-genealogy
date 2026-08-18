@@ -5,6 +5,25 @@ export function personLabel(p: { firstName: string; lastName: string; middleName
   return label || 'Новый человек'
 }
 
+/** Компактная подпись для карточки в древе: «Иванов И. П.» */
+export function personShortLabel(p: { firstName: string; lastName: string; middleName?: string | null }): string {
+  const last = p.lastName.trim()
+  const initials = [p.firstName, p.middleName]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .map((part) => `${part![0]}.`)
+  const given = initials.join(' ')
+  if (last && given) return `${last} ${given}`
+  if (last) return last
+  if (given) return given
+  return personLabel(p)
+}
+
+export function personInitials(p: { firstName: string; lastName: string }): string {
+  const letters = [p.firstName?.trim()?.[0], p.lastName?.trim()?.[0]].filter(Boolean).join('')
+  return letters.toUpperCase() || '?'
+}
+
 export function formatDate(d: PartialDate): string {
   if (d.originalText) return d.originalText
   const parts: string[] = []

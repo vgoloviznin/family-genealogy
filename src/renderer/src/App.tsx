@@ -346,22 +346,58 @@ export default function App() {
             </main>
           </>
         ) : (
-          <div className="flex-1 min-h-0">
-            {treeData ? (
-              <TreeView
-                key={treeData.focusPersonId}
-                data={treeData}
-                onSelectPerson={(id) => {
-                  void flushThen(() => {
-                    setSelectedId(id)
-                    setView('list')
-                  })
-                }}
-              />
-            ) : (
-              <div className="h-full flex items-center justify-center text-stone-500">Загрузка древа…</div>
-            )}
-          </div>
+          <>
+            <div className="flex-1 min-w-0">
+              {treeData ? (
+                <TreeView
+                  data={treeData}
+                  selectedId={selectedId}
+                  onSelectPerson={(id) => {
+                    void flushThen(() => {
+                      setSelectedId(id)
+                      if (!id) setPersonDetail(null)
+                    })
+                  }}
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-stone-500 bg-[#f4f1eb] rounded-lg border border-stone-200">
+                  Загрузка древа…
+                </div>
+              )}
+            </div>
+            {personDetail && selectedId ? (
+              <aside className="w-[420px] shrink-0 min-w-0">
+                <PersonDetailPanel
+                  key={personDetail.id}
+                  person={personDetail}
+                  allPeople={people}
+                  onSave={async (patch) => {
+                    await window.api.people.update(patch)
+                  }}
+                  onRefresh={async () => {
+                    await refreshPerson(selectedId)
+                    await refreshPeople()
+                  }}
+                  onSelectPerson={(id) => {
+                    void flushThen(() => setSelectedId(id))
+                  }}
+                  onDeleted={() => {
+                    dirtyRef.current = false
+                    setSelectedId(null)
+                    setPersonDetail(null)
+                    void refreshPeople()
+                  }}
+                  onDirtyChange={(d) => {
+                    dirtyRef.current = d
+                  }}
+                  onFlushSave={(fn) => {
+                    flushSaveRef.current = fn
+                  }}
+                  onSaveNotice={showToast}
+                />
+              </aside>
+            ) : null}
+          </>
         )}
       </div>
 
