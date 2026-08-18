@@ -12,7 +12,9 @@
     "postinstall": "electron-builder install-app-deps",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "build:mac": "npm run build && electron-builder --mac --config",
-    "build:win": "npm run build && electron-builder --win --config"
+    "build:win": "npm run build && electron-builder --win --config",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.14",
@@ -53,7 +55,8 @@
     "electron-vite": "^4.0.0",
     "tailwindcss": "^4.1.12",
     "typescript": "^5.9.2",
-    "vite": "^7.1.2"
+    "vite": "^7.1.2",
+    "vitest": "^3.2.4"
   },
   "build": {
     "appId": "com.family.geneology",
