@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
+import { assertFamilyApi, createFamilyApi } from '@shared/family-api'
 import { IPC_CHANNELS } from '@shared/types'
 import type { Api, PackProgress, ProjectMeta, MenuCommand, UndoAction } from '@shared/types'
 
@@ -25,21 +26,7 @@ const api: Api = {
     delete: (id) => ipcRenderer.invoke(IPC_CHANNELS.PEOPLE_DELETE, id),
     search: (query) => ipcRenderer.invoke(IPC_CHANNELS.PEOPLE_SEARCH, query)
   },
-  family: {
-    addPartner: (personId, input, unionType) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_ADD_PARTNER, personId, input, unionType),
-    addChild: (personId, input, pedigree) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_ADD_CHILD, personId, input, pedigree),
-    addParents: (personId, inputs, pedigree) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_ADD_PARENTS, personId, inputs, pedigree),
-    getForPerson: (personId) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_GET_FOR_PERSON, personId),
-    linkPartner: (personId, partnerId, unionType) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_LINK_PARTNER, personId, partnerId, unionType),
-    linkChild: (personId, childId, pedigree) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_LINK_CHILD, personId, childId, pedigree),
-    linkParent: (personId, parentId, pedigree) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_LINK_PARENT, personId, parentId, pedigree),
-    linkPartnerToFamily: (familyId, personId) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_LINK_PARTNER_TO_FAMILY, familyId, personId),
-    linkChildToFamily: (familyId, childId, pedigree) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_LINK_CHILD_TO_FAMILY, familyId, childId, pedigree),
-    unlinkPartner: (familyId, personId) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_UNLINK_PARTNER, familyId, personId),
-    unlinkChild: (familyId, personId) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_UNLINK_CHILD, familyId, personId),
-    setUnionType: (familyId, unionType) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_SET_UNION_TYPE, familyId, unionType),
-    setPedigree: (familyId, childId, pedigree) => ipcRenderer.invoke(IPC_CHANNELS.FAMILY_SET_PEDIGREE, familyId, childId, pedigree)
-  },
+  family: createFamilyApi((channel, ...args) => ipcRenderer.invoke(channel, ...args)),
   events: {
     listForPerson: (personId) => ipcRenderer.invoke(IPC_CHANNELS.EVENTS_LIST_FOR_PERSON, personId),
     upsert: (input) => ipcRenderer.invoke(IPC_CHANNELS.EVENTS_UPSERT, input),
@@ -104,6 +91,7 @@ const api: Api = {
   }
 }
 
+assertFamilyApi(api.family)
 contextBridge.exposeInMainWorld('api', api)
 
 export type { Api }

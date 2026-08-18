@@ -17,10 +17,12 @@ export const IPC_CHANNELS = {
   FAMILY_ADD_PARTNER: 'family:addPartner',
   FAMILY_ADD_CHILD: 'family:addChild',
   FAMILY_ADD_PARENTS: 'family:addParents',
+  FAMILY_ADD_SIBLING: 'family:addSibling',
   FAMILY_GET_FOR_PERSON: 'family:getForPerson',
   FAMILY_LINK_PARTNER: 'family:linkPartner',
   FAMILY_LINK_CHILD: 'family:linkChild',
   FAMILY_LINK_PARENT: 'family:linkParent',
+  FAMILY_LINK_SIBLING: 'family:linkSibling',
   FAMILY_LINK_PARTNER_TO_FAMILY: 'family:linkPartnerToFamily',
   FAMILY_LINK_CHILD_TO_FAMILY: 'family:linkChildToFamily',
   FAMILY_UNLINK_PARTNER: 'family:unlinkPartner',
@@ -358,10 +360,12 @@ export interface Api {
     addPartner: (personId: string, partnerInput: CreatePersonInput, unionType?: UnionType) => Promise<PersonDetail>
     addChild: (personId: string, childInput: CreatePersonInput, pedigree?: PedigreeType) => Promise<PersonDetail>
     addParents: (personId: string, parentInputs: [CreatePersonInput, CreatePersonInput?], pedigree?: PedigreeType) => Promise<PersonDetail>
+    addSibling: (personId: string, siblingInput: CreatePersonInput, pedigree?: PedigreeType) => Promise<PersonDetail>
     getForPerson: (personId: string) => Promise<FamilySummary[]>
     linkPartner: (personId: string, partnerId: string, unionType?: UnionType) => Promise<void>
     linkChild: (personId: string, childId: string, pedigree?: PedigreeType) => Promise<void>
     linkParent: (personId: string, parentId: string, pedigree?: PedigreeType) => Promise<void>
+    linkSibling: (personId: string, siblingId: string, pedigree?: PedigreeType) => Promise<void>
     linkPartnerToFamily: (familyId: string, personId: string) => Promise<void>
     linkChildToFamily: (familyId: string, childId: string, pedigree?: PedigreeType) => Promise<void>
     unlinkPartner: (familyId: string, personId: string) => Promise<void>

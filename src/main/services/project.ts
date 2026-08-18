@@ -1,6 +1,6 @@
 import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'fs'
 import { join } from 'path'
-import { dialog } from 'electron/main'
+import { dialog } from 'electron'
 import { openDatabase, closeDatabase } from '../db/connection'
 import { SCHEMA_VERSION } from '../db/schema'
 import { newId, nowIso } from '../utils/id'

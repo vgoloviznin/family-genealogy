@@ -197,6 +197,36 @@ export async function addChildToPerson(
   return addChildToFamily(familyId, childInput, pedigree)
 }
 
+async function getOrCreateFamilyForSibling(personId: string): Promise<string> {
+  const families = await getFamiliesForPerson(personId)
+  const asChild = families.find((f) => f.children.some((c) => c.person.id === personId))
+  if (asChild) return asChild.id
+  const familyId = await createFamily('partnership')
+  await linkChild(familyId, personId, 'birth')
+  return familyId
+}
+
+export async function addSibling(
+  personId: string,
+  siblingInput: CreatePersonInput,
+  pedigree: PedigreeType = 'birth'
+): Promise<PersonDetail> {
+  const familyId = await getOrCreateFamilyForSibling(personId)
+  const sibling = await createPerson(siblingInput)
+  await linkChild(familyId, sibling.id, pedigree)
+  return (await getPersonDetail(sibling.id))!
+}
+
+export async function linkExistingSibling(
+  personId: string,
+  siblingId: string,
+  pedigree: PedigreeType = 'birth'
+): Promise<void> {
+  if (personId === siblingId) throw new Error('Нельзя указать человека своим братом или сестрой')
+  const familyId = await getOrCreateFamilyForSibling(personId)
+  await linkChildToFamily(familyId, siblingId, pedigree)
+}
+
 export async function linkExistingPartner(
   personId: string,
   partnerId: string,
@@ -205,7 +235,7 @@ export async function linkExistingPartner(
   if (personId === partnerId) throw new Error('Нельзя связать человека с самим собой')
   const families = await getFamiliesForPerson(personId)
   const already = families.some((f) => f.partners.some((p) => p.id === partnerId))
-  if (already) throw new Error('Эти люди уже партнёры')
+  if (already) throw new Error('Эти люди уже супруги')
 
   const partnerFamily = families.find((f) => f.partners.length === 1 && f.partners[0]?.id === personId)
   let familyId: string

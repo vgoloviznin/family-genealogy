@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, protocol, net } from 'electron/main'
+import { app, BrowserWindow, Menu, protocol, net } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import { registerIpcHandlers } from './ipc/register'

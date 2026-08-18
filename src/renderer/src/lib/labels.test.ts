@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDate, formatLifeSpan, personLabel } from './labels'
+import { formatDate, formatLifeSpan, personLabel, siblingLabel, spouseLabel } from './labels'
 
 describe('personLabel', () => {
   it('joins name parts in Russian order', () => {
@@ -40,5 +40,21 @@ describe('formatDate', () => {
         originalText: 'конец XIX в.'
       })
     ).toBe('конец XIX в.')
+  })
+})
+
+describe('spouseLabel', () => {
+  it('uses spouse terms by sex', () => {
+    expect(spouseLabel('male')).toBe('Супруг')
+    expect(spouseLabel('female')).toBe('Супруга')
+    expect(spouseLabel('unknown')).toBe('Супруг(а)')
+  })
+})
+
+describe('siblingLabel', () => {
+  it('uses sibling terms by sex', () => {
+    expect(siblingLabel('male')).toBe('Брат')
+    expect(siblingLabel('female')).toBe('Сестра')
+    expect(siblingLabel()).toBe('Брат/сестра')
   })
 })

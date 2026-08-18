@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync } from 'fs'
 import { join, extname, basename } from 'path'
-import { dialog, shell } from 'electron/main'
+import { dialog, shell } from 'electron'
 import { eq, and, isNull, inArray } from 'drizzle-orm'
 import sharp from 'sharp'
 import { getDatabase } from '../db/connection'

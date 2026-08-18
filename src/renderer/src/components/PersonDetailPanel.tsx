@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   PersonDetail,
@@ -27,7 +27,9 @@ import {
   SOURCE_TYPE_LABELS,
   DEATH_RELATED_EVENTS,
   ADDABLE_EVENT_TYPES,
-  emptyDate
+  emptyDate,
+  spouseLabel,
+  siblingLabel
 } from '../lib/labels'
 
 interface Props {
@@ -38,6 +40,8 @@ interface Props {
   onSelectPerson: (id: string) => void
   onDeleted: () => void
   onDirtyChange: (dirty: boolean) => void
+  onFlushSave: (flush: () => Promise<boolean>) => void
+  onSaveNotice: (message: string) => void
 }
 
 function buildFormFromPerson(person: PersonDetail) {
@@ -101,7 +105,9 @@ export function PersonDetailPanel({
   onRefresh,
   onSelectPerson,
   onDeleted,
-  onDirtyChange
+  onDirtyChange,
+  onFlushSave,
+  onSaveNotice
 }: Props) {
   const { t } = useTranslation()
   const [tab, setTab] = useState<'info' | 'family' | 'events' | 'associations' | 'media' | 'sources'>('info')
@@ -118,7 +124,7 @@ export function PersonDetailPanel({
   const [showAssociationForm, setShowAssociationForm] = useState(false)
   const [assocPersonId, setAssocPersonId] = useState('')
   const [assocRole, setAssocRole] = useState<CreateAssociationInput['role']>('godparent')
-  const [linkKind, setLinkKind] = useState<'partner' | 'child' | 'parent' | null>(null)
+  const [linkKind, setLinkKind] = useState<'partner' | 'child' | 'parent' | 'sibling' | null>(null)
   const [linkPersonId, setLinkPersonId] = useState('')
   const [sources, setSources] = useState<Source[]>([])
   const [citeSourceId, setCiteSourceId] = useState('')
@@ -128,9 +134,19 @@ export function PersonDetailPanel({
   const [citeExcerpt, setCiteExcerpt] = useState('')
   const [citeEventId, setCiteEventId] = useState('')
   const [showCiteForm, setShowCiteForm] = useState(false)
+  const [lastSaved, setLastSaved] = useState(() => JSON.stringify(buildFormFromPerson(person)))
+  const formRef = useRef(form)
+  const lastSavedRef = useRef(lastSaved)
+  const personRef = useRef(person)
+  const savingRef = useRef<Promise<boolean> | null>(null)
+  formRef.current = form
+  lastSavedRef.current = lastSaved
+  personRef.current = person
 
   useEffect(() => {
-    setForm(buildFormFromPerson(person))
+    const next = buildFormFromPerson(person)
+    setForm(next)
+    setLastSaved(JSON.stringify(next))
     setSaveError('')
     setEditingEventId(null)
     setShowAssociationForm(false)
@@ -142,12 +158,81 @@ export function PersonDetailPanel({
     void window.api.sources.list().then(setSources)
   }, [person.id, person.citations.length])
 
-  const initial = useMemo(() => JSON.stringify(buildFormFromPerson(person)), [person])
-  const dirty = JSON.stringify(form) !== initial
+  const dirty = JSON.stringify(form) !== lastSaved
 
   useEffect(() => {
     onDirtyChange(dirty)
   }, [dirty, onDirtyChange])
+
+  const persist = useCallback(
+    async (mode: 'manual' | 'auto'): Promise<boolean> => {
+      if (savingRef.current) {
+        const previous = await savingRef.current
+        if (JSON.stringify(formRef.current) === lastSavedRef.current) return previous
+      }
+      const run = (async () => {
+        const current = formRef.current
+        const snapshot = JSON.stringify(current)
+        if (snapshot === lastSavedRef.current) return true
+        if (!current.firstName.trim() && !current.lastName.trim()) {
+          if (mode === 'manual') setSaveError('Укажите имя или фамилию')
+          return false
+        }
+        setSaveError('')
+        const p = personRef.current
+        if (mode === 'manual') {
+          await window.api.undo.push({ type: 'person-update', before: snapshotPerson(p) })
+        }
+        await onSave({
+          id: p.id,
+          firstName: current.firstName,
+          lastName: current.lastName,
+          middleName: current.middleName,
+          maidenName: current.maidenName,
+          sex: current.sex,
+          isLiving: current.isLiving,
+          notes: current.notes,
+          birth: {
+            placeName: current.birthPlace,
+            date: current.birthDate
+          },
+          ...(current.isLiving
+            ? { death: null }
+            : {
+                death: {
+                  placeName: current.deathPlace,
+                  date: current.deathDate
+                }
+              })
+        })
+        lastSavedRef.current = snapshot
+        setLastSaved(snapshot)
+        onDirtyChange(false)
+        onSaveNotice(mode === 'auto' ? 'Сохранено автоматически' : 'Сохранено')
+        await onRefresh()
+        return true
+      })()
+      savingRef.current = run
+      try {
+        return await run
+      } finally {
+        savingRef.current = null
+      }
+    },
+    [onSave, onRefresh, onDirtyChange, onSaveNotice]
+  )
+
+  useEffect(() => {
+    onFlushSave(() => persist('auto'))
+  }, [onFlushSave, persist])
+
+  useEffect(() => {
+    if (!dirty) return
+    const timer = window.setTimeout(() => {
+      void persist('auto')
+    }, 900)
+    return () => window.clearTimeout(timer)
+  }, [dirty, form, persist])
 
   const otherPeople = useMemo(() => allPeople.filter((p) => p.id !== person.id), [allPeople, person.id])
 
@@ -167,42 +252,15 @@ export function PersonDetailPanel({
   )
 
   const handleSave = async () => {
-    if (!form.firstName.trim() && !form.lastName.trim()) {
-      setSaveError('Укажите имя или фамилию')
-      return
-    }
-    setSaveError('')
-    await window.api.undo.push({ type: 'person-update', before: snapshotPerson(person) })
-    await onSave({
-      id: person.id,
-      firstName: form.firstName,
-      lastName: form.lastName,
-      middleName: form.middleName,
-      maidenName: form.maidenName,
-      sex: form.sex,
-      isLiving: form.isLiving,
-      notes: form.notes,
-      birth: {
-        placeName: form.birthPlace,
-        date: form.birthDate
-      },
-      ...(form.isLiving
-        ? { death: null }
-        : {
-            death: {
-              placeName: form.deathPlace,
-              date: form.deathDate
-            }
-          })
-    })
-    await onRefresh()
+    await persist('manual')
   }
 
-  const addRelative = async (kind: 'partner' | 'child' | 'parent') => {
+  const addRelative = async (kind: 'partner' | 'child' | 'parent' | 'sibling') => {
     const input = { firstName: '', lastName: '', sex: 'unknown' as const }
     let created
     if (kind === 'partner') created = await window.api.family.addPartner(person.id, input)
     else if (kind === 'child') created = await window.api.family.addChild(person.id, input)
+    else if (kind === 'sibling') created = await window.api.family.addSibling(person.id, input)
     else created = await window.api.family.addParents(person.id, [input])
     onSelectPerson(created.id)
     await onRefresh()
@@ -213,6 +271,7 @@ export function PersonDetailPanel({
     try {
       if (linkKind === 'partner') await window.api.family.linkPartner(person.id, linkPersonId)
       else if (linkKind === 'child') await window.api.family.linkChild(person.id, linkPersonId)
+      else if (linkKind === 'sibling') await window.api.family.linkSibling(person.id, linkPersonId)
       else await window.api.family.linkParent(person.id, linkPersonId)
       setLinkKind(null)
       setLinkPersonId('')
@@ -323,6 +382,9 @@ export function PersonDetailPanel({
           {person.isLiving && (
             <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full shrink-0">жив</span>
           )}
+          {dirty && (
+            <span className="text-xs text-amber-700 shrink-0">не сохранено</span>
+          )}
           <button className="text-xs text-red-600 shrink-0" onClick={() => void handleDeletePerson()}>
             {t('delete')}
           </button>
@@ -403,30 +465,39 @@ export function PersonDetailPanel({
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
               />
             </label>
-            <button className="bg-stone-800 text-white px-4 py-2 rounded-lg" onClick={() => void handleSave()}>
-              {t('save')}
-            </button>
+            <div className="flex items-center gap-3">
+              <button className="bg-stone-800 text-white px-4 py-2 rounded-lg" onClick={() => void handleSave()}>
+                {t('save')}
+              </button>
+              <span className="text-xs text-stone-400">Изменения сохраняются сами через секунду</span>
+            </div>
           </>
         )}
 
         {tab === 'family' && (
           <>
             <div className="flex gap-2 flex-wrap">
-              <ActionBtn label="Новый партнёр" onClick={() => void addRelative('partner')} />
+              <ActionBtn label="Новый супруг(а)" onClick={() => void addRelative('partner')} />
               <ActionBtn label="Новый ребёнок" onClick={() => void addRelative('child')} />
               <ActionBtn label="Новый родитель" onClick={() => void addRelative('parent')} />
+              <ActionBtn label="Новый брат/сестра" onClick={() => void addRelative('sibling')} />
               <ActionBtn label="Связать существующего" onClick={() => setLinkKind(linkKind ? null : 'partner')} />
             </div>
             {linkKind && (
               <div className="border rounded-lg p-3 space-y-2 bg-stone-50">
-                <div className="flex gap-2">
-                  {(['partner', 'child', 'parent'] as const).map((k) => (
+                <div className="flex gap-2 flex-wrap">
+                  {([
+                    ['partner', 'Супруг(а)'],
+                    ['child', 'Ребёнок'],
+                    ['parent', 'Родитель'],
+                    ['sibling', 'Брат/сестра']
+                  ] as const).map(([k, label]) => (
                     <button
                       key={k}
                       className={`text-sm px-2 py-1 rounded ${linkKind === k ? 'bg-stone-800 text-white' : 'border'}`}
                       onClick={() => setLinkKind(k)}
                     >
-                      {k === 'partner' ? 'Партнёр' : k === 'child' ? 'Ребёнок' : 'Родитель'}
+                      {label}
                     </button>
                   ))}
                 </div>
@@ -457,10 +528,15 @@ export function PersonDetailPanel({
             {person.families.length === 0 ? (
               <EmptyState text="Семейные связи пока не добавлены." />
             ) : (
-              person.families.map((f) => (
+              person.families.map((f) => {
+                const isChildHere = f.children.some((c) => c.person.id === person.id)
+                const spouses = f.partners.filter((p) => p.id !== person.id)
+                const siblings = f.children.filter((c) => c.person.id !== person.id)
+                const children = isChildHere ? [] : f.children
+                return (
                 <div key={f.id} className="border rounded-lg p-3 space-y-3">
                   <label className="text-sm flex items-center gap-2">
-                    Тип союза
+                    {isChildHere ? 'Семья родителей' : 'Тип союза'}
                     <select
                       className="border rounded px-2 py-1"
                       value={f.unionType}
@@ -474,10 +550,13 @@ export function PersonDetailPanel({
                     </select>
                   </label>
                   <div className="space-y-1">
-                    <div className="text-xs text-stone-500">Партнёры</div>
-                    {f.partners.length === 0 && <span className="text-sm text-stone-400">—</span>}
-                    {f.partners.map((p) => (
+                    <div className="text-xs text-stone-500">{isChildHere ? 'Родители' : 'Супруги'}</div>
+                    {(isChildHere ? f.partners : spouses).length === 0 && <span className="text-sm text-stone-400">—</span>}
+                    {(isChildHere ? f.partners : spouses).map((p) => (
                       <div key={p.id} className="flex items-center gap-2 text-sm">
+                        <span className="text-xs text-stone-400 w-20 shrink-0">
+                          {isChildHere ? 'Родитель' : spouseLabel(p.sex)}
+                        </span>
                         <button className="underline" onClick={() => onSelectPerson(p.id)}>
                           {personLabel(p)}
                         </button>
@@ -494,7 +573,7 @@ export function PersonDetailPanel({
                         </button>
                       </div>
                     ))}
-                    {f.partners.length < 2 && (
+                    {(isChildHere ? f.partners.length < 2 : f.partners.length < 2) && (
                       <select
                         className="border rounded px-2 py-1 text-sm mt-1"
                         defaultValue=""
@@ -504,21 +583,78 @@ export function PersonDetailPanel({
                           void window.api.family.linkPartnerToFamily(f.id, id).then(onRefresh)
                         }}
                       >
-                        <option value="">+ партнёр в этот союз</option>
+                        <option value="">{isChildHere ? '+ родитель' : '+ супруг / супруга'}</option>
                         {otherPeople
                           .filter((p) => !f.partners.some((x) => x.id === p.id))
                           .map((p) => (
                             <option key={p.id} value={p.id}>
-                              {personLabel(p)}
+                              {isChildHere ? personLabel(p) : `${personLabel(p)} (${spouseLabel(p.sex).toLowerCase()})`}
                             </option>
                           ))}
                       </select>
                     )}
                   </div>
+                  {isChildHere && (
+                    <div className="space-y-1">
+                      <div className="text-xs text-stone-500">Братья и сёстры</div>
+                      {siblings.length === 0 && <span className="text-sm text-stone-400">—</span>}
+                      {siblings.map(({ person: c, pedigree }) => (
+                        <div key={c.id} className="flex items-center gap-2 text-sm flex-wrap">
+                          <span className="text-xs text-stone-400 w-20 shrink-0">{siblingLabel(c.sex)}</span>
+                          <button className="underline" onClick={() => onSelectPerson(c.id)}>
+                            {personLabel(c)}
+                          </button>
+                          <select
+                            className="border rounded px-1 py-0.5 text-xs"
+                            value={pedigree}
+                            onChange={(e) =>
+                              void window.api.family.setPedigree(f.id, c.id, e.target.value as PedigreeType).then(onRefresh)
+                            }
+                          >
+                            {Object.entries(PEDIGREE_LABELS).map(([k, v]) => (
+                              <option key={k} value={k}>
+                                {v}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            className="text-xs text-red-600"
+                            onClick={() => {
+                              void window.api.undo
+                                .push({ type: 'family-relink-child', familyId: f.id, personId: c.id, pedigree })
+                                .then(() => window.api.family.unlinkChild(f.id, c.id))
+                                .then(onRefresh)
+                            }}
+                          >
+                            отвязать
+                          </button>
+                        </div>
+                      ))}
+                      <select
+                        className="border rounded px-2 py-1 text-sm mt-1"
+                        defaultValue=""
+                        onChange={(e) => {
+                          const id = e.target.value
+                          if (!id) return
+                          void window.api.family.linkChildToFamily(f.id, id).then(onRefresh)
+                        }}
+                      >
+                        <option value="">+ брат / сестра</option>
+                        {otherPeople
+                          .filter((p) => !f.children.some((x) => x.person.id === p.id) && !f.partners.some((x) => x.id === p.id))
+                          .map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {personLabel(p)} ({siblingLabel(p.sex).toLowerCase()})
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+                  {!isChildHere && (
                   <div className="space-y-1">
                     <div className="text-xs text-stone-500">Дети</div>
-                    {f.children.length === 0 && <span className="text-sm text-stone-400">—</span>}
-                    {f.children.map(({ person: c, pedigree }) => (
+                    {children.length === 0 && <span className="text-sm text-stone-400">—</span>}
+                    {children.map(({ person: c, pedigree }) => (
                       <div key={c.id} className="flex items-center gap-2 text-sm flex-wrap">
                         <button className="underline" onClick={() => onSelectPerson(c.id)}>
                           {personLabel(c)}
@@ -568,8 +704,10 @@ export function PersonDetailPanel({
                         ))}
                     </select>
                   </div>
+                  )}
                 </div>
-              ))
+                )
+              })
             )}
           </>
         )}

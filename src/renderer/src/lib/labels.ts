@@ -1,4 +1,4 @@
-import type { PartialDate, DatePrecision } from '@shared/types'
+import type { PartialDate, DatePrecision, Sex } from '@shared/types'
 
 export function personLabel(p: { firstName: string; lastName: string; middleName?: string | null }): string {
   const label = [p.lastName, p.firstName, p.middleName].filter(Boolean).join(' ')
@@ -69,6 +69,18 @@ export const SEX_LABELS: Record<string, string> = {
 export const UNION_TYPE_LABELS: Record<string, string> = {
   marriage: 'Брак',
   partnership: 'Союз'
+}
+
+export function spouseLabel(sex?: Sex | null): string {
+  if (sex === 'female') return 'Супруга'
+  if (sex === 'male') return 'Супруг'
+  return 'Супруг(а)'
+}
+
+export function siblingLabel(sex?: Sex | null): string {
+  if (sex === 'female') return 'Сестра'
+  if (sex === 'male') return 'Брат'
+  return 'Брат/сестра'
 }
 
 export const SOURCE_TYPE_LABELS: Record<string, string> = {

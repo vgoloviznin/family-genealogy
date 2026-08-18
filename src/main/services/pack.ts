@@ -1,7 +1,7 @@
 import { createHash } from 'crypto'
 import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'fs'
 import { join, dirname } from 'path'
-import { dialog, BrowserWindow, app } from 'electron/main'
+import { dialog, BrowserWindow, app } from 'electron'
 import archiver from 'archiver'
 import extract from 'extract-zip'
 import { checkpointDatabase, closeDatabase } from '../db/connection'

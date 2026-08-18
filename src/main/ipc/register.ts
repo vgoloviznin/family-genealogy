@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron/main'
+import { ipcMain } from 'electron'
 import { IPC_CHANNELS } from '@shared/types'
 import * as project from '../services/project'
 import * as people from '../services/people'
@@ -40,10 +40,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.FAMILY_ADD_PARTNER, wrap((personId, input, unionType) => family.addPartner(personId, input, unionType)))
   ipcMain.handle(IPC_CHANNELS.FAMILY_ADD_CHILD, wrap((personId, input, pedigree) => family.addChildToPerson(personId, input, pedigree)))
   ipcMain.handle(IPC_CHANNELS.FAMILY_ADD_PARENTS, wrap((personId, inputs, pedigree) => family.addParents(personId, inputs, pedigree)))
+  ipcMain.handle(IPC_CHANNELS.FAMILY_ADD_SIBLING, wrap((personId, input, pedigree) => family.addSibling(personId, input, pedigree)))
   ipcMain.handle(IPC_CHANNELS.FAMILY_GET_FOR_PERSON, wrap((personId: string) => family.getFamiliesForPerson(personId)))
   ipcMain.handle(IPC_CHANNELS.FAMILY_LINK_PARTNER, wrap((personId, partnerId, unionType) => family.linkExistingPartner(personId, partnerId, unionType)))
   ipcMain.handle(IPC_CHANNELS.FAMILY_LINK_CHILD, wrap((personId, childId, pedigree) => family.linkExistingChild(personId, childId, pedigree)))
   ipcMain.handle(IPC_CHANNELS.FAMILY_LINK_PARENT, wrap((personId, parentId, pedigree) => family.linkExistingParent(personId, parentId, pedigree)))
+  ipcMain.handle(IPC_CHANNELS.FAMILY_LINK_SIBLING, wrap((personId, siblingId, pedigree) => family.linkExistingSibling(personId, siblingId, pedigree)))
   ipcMain.handle(IPC_CHANNELS.FAMILY_LINK_PARTNER_TO_FAMILY, wrap((familyId, personId) => family.linkPartnerToFamily(familyId, personId)))
   ipcMain.handle(IPC_CHANNELS.FAMILY_LINK_CHILD_TO_FAMILY, wrap((familyId, childId, pedigree) => family.linkChildToFamily(familyId, childId, pedigree)))
   ipcMain.handle(IPC_CHANNELS.FAMILY_UNLINK_PARTNER, wrap((familyId, personId) => family.unlinkPartner(familyId, personId)))

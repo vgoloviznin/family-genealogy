@@ -1,4 +1,4 @@
-import { app, dialog } from 'electron/main'
+import { app, dialog } from 'electron'
 import Store from 'electron-store'
 import { v7 as uuidv7 } from 'uuid'
 import type { AppSettings } from '@shared/types'

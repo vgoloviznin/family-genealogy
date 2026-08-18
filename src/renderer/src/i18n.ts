@@ -32,7 +32,7 @@ const resources = {
       events: 'События',
       associations: 'Связи',
       media: 'Файлы',
-      addPartner: 'Добавить партнёра',
+      addPartner: 'Добавить супруга/супругу',
       addChild: 'Добавить ребёнка',
       addParents: 'Добавить родителей',
       addEvent: 'Добавить событие',

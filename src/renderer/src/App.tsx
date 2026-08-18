@@ -20,12 +20,25 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [packStatus, setPackStatus] = useState('')
   const [error, setError] = useState('')
+  const [saveNotice, setSaveNotice] = useState('')
   const dirtyRef = useRef(false)
+  const flushSaveRef = useRef<() => Promise<boolean>>(async () => true)
+  const saveNoticeTimer = useRef<number | null>(null)
 
-  const confirmLeave = (): boolean => {
-    if (!dirtyRef.current) return true
-    return window.confirm('Есть несохранённые изменения. Уйти без сохранения?')
-  }
+  const showSaveNotice = useCallback((message: string) => {
+    setSaveNotice(message)
+    if (saveNoticeTimer.current) window.clearTimeout(saveNoticeTimer.current)
+    saveNoticeTimer.current = window.setTimeout(() => setSaveNotice(''), 1800)
+  }, [])
+
+  const flushThen = useCallback(async (next: () => void | Promise<void>) => {
+    const ok = await flushSaveRef.current()
+    if (!ok && dirtyRef.current) {
+      if (!window.confirm('Есть несохранённые изменения. Уйти без сохранения?')) return
+    }
+    dirtyRef.current = false
+    next()
+  }, [])
 
   const refreshPeople = useCallback(async () => {
     const list = search.trim() ? await window.api.people.search(search) : await window.api.people.list()
@@ -48,10 +61,11 @@ export default function App() {
 
   const selectPerson = useCallback((id: string | null) => {
     if (id === selectedId) return
-    if (!confirmLeave()) return
-    setSelectedId(id)
-    if (!id) setPersonDetail(null)
-  }, [selectedId])
+    void flushThen(() => {
+      setSelectedId(id)
+      if (!id) setPersonDetail(null)
+    })
+  }, [selectedId, flushThen])
 
   useEffect(() => {
     void window.api.project.getCurrent().then((p) => {
@@ -142,42 +156,41 @@ export default function App() {
   }
 
   const handleAddPerson = async () => {
-    if (!confirmLeave()) return
-    const p = await window.api.people.create({ firstName: '', lastName: '' })
-    setView('list')
-    dirtyRef.current = false
-    setSelectedId(p.id)
-    setPersonDetail(p)
-    await refreshPeople()
+    await flushThen(async () => {
+      const p = await window.api.people.create({ firstName: '', lastName: '' })
+      setView('list')
+      dirtyRef.current = false
+      setSelectedId(p.id)
+      setPersonDetail(p)
+      await refreshPeople()
+    })
   }
 
   useEffect(() => {
     return window.api.menu.onCommand((command: MenuCommand) => {
       if (command === 'createProject') {
-        if (!confirmLeave()) return
-        const name = window.prompt('Название проекта', 'Моё семейное древо')
-        if (name) void handleCreate(name)
+        void flushThen(() => {
+          const name = window.prompt('Название проекта', 'Моё семейное древо')
+          if (name) void handleCreate(name)
+        })
         return
       }
       if (command === 'openProject') {
-        if (!confirmLeave()) return
-        void handleOpen()
+        void flushThen(() => void handleOpen())
         return
       }
       if (command === 'import') {
-        if (!confirmLeave()) return
-        void handleImport()
+        void flushThen(() => void handleImport())
         return
       }
       if (command === 'export') void handleExport()
       if (command === 'backup') void handleBackup()
       if (command === 'restore') {
-        if (!confirmLeave()) return
-        void handleRestore()
+        void flushThen(() => void handleRestore())
       }
       if (command === 'undo') void handleUndo()
     })
-  }, [project, selectedId])
+  }, [project, selectedId, flushThen])
 
   if (!project) {
     return (
@@ -210,12 +223,12 @@ export default function App() {
           <span className="text-xs bg-amber-100 text-amber-900 px-2 py-1 rounded">{t('cloudWarning')}</span>
         )}
         <div className="flex-1" />
-        <button className="text-sm px-3 py-1 rounded border" onClick={() => { if (confirmLeave()) setView('list') }}>
+        <button className="text-sm px-3 py-1 rounded border" onClick={() => void flushThen(() => setView('list'))}>
           {t('people')}
         </button>
         <button
           className="text-sm px-3 py-1 rounded border"
-          onClick={() => { if (confirmLeave()) setView('tree') }}
+          onClick={() => void flushThen(() => setView('tree'))}
           disabled={!selectedId}
         >
           {t('tree')}
@@ -234,6 +247,7 @@ export default function App() {
         </button>
       </header>
 
+      <SaveToast message={saveNotice} />
       {packStatus && <div className="text-xs text-center py-1 bg-stone-100 text-stone-600">{packStatus}</div>}
       {error && <div className="text-xs text-center py-1 bg-red-50 text-red-700">{error}</div>}
 
@@ -299,6 +313,10 @@ export default function App() {
                   onDirtyChange={(d) => {
                     dirtyRef.current = d
                   }}
+                  onFlushSave={(fn) => {
+                    flushSaveRef.current = fn
+                  }}
+                  onSaveNotice={showSaveNotice}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-stone-500 bg-white rounded-lg border">
@@ -313,9 +331,10 @@ export default function App() {
               <TreeView
                 data={treeData}
                 onSelectPerson={(id) => {
-                  if (!confirmLeave()) return
-                  setSelectedId(id)
-                  setView('list')
+                  void flushThen(() => {
+                    setSelectedId(id)
+                    setView('list')
+                  })
                 }}
               />
             ) : (
@@ -400,6 +419,39 @@ function SettingsModal({
             {t('save')}
           </button>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function SaveToast({ message }: { message: string }) {
+  const [text, setText] = useState(message)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (message) {
+      setText(message)
+      setOpen(false)
+      const frame = window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => setOpen(true))
+      })
+      return () => window.cancelAnimationFrame(frame)
+    }
+    setOpen(false)
+    const hide = window.setTimeout(() => setText(''), 320)
+    return () => window.clearTimeout(hide)
+  }, [message])
+
+  if (!text) return null
+
+  return (
+    <div className="fixed bottom-4 left-4 z-50 pointer-events-none">
+      <div
+        className={`text-xs text-stone-600 bg-white/90 border border-stone-200 shadow-sm rounded-md px-3 py-1.5 transition-opacity duration-300 ease-out ${
+          open ? 'opacity-100' : 'opacity-0'
+        }`}
+      >
+        {text}
       </div>
     </div>
   )
