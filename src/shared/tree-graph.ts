@@ -126,3 +126,10 @@ export function assignGenerationsFromFocus(
 
   return gen
 }
+
+/** Корень для обзора всего древа: человек, который ничей ребёнок */
+export function defaultTreeFocusId(personIds: string[], childIds: Iterable<string>): string | null {
+  if (personIds.length === 0) return null
+  const children = new Set(childIds)
+  return personIds.find((id) => !children.has(id)) ?? personIds[0]
+}

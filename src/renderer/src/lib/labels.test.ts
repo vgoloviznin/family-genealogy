@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDate, formatLifeSpan, personLabel, siblingLabel, spouseLabel } from './labels'
+import { formatDate, formatLifeSpan, deceasedLabel, personLabel, siblingLabel, spouseLabel } from './labels'
 
 describe('personLabel', () => {
   it('joins name parts in Russian order', () => {
@@ -28,6 +28,26 @@ describe('formatLifeSpan', () => {
 
   it('shows living without dates', () => {
     expect(formatLifeSpan({ isLiving: true })).toBe('жив')
+  })
+
+  it('shows deceased label by sex when dates are unknown', () => {
+    expect(formatLifeSpan({ isLiving: false, sex: 'male' })).toBe('умер')
+    expect(formatLifeSpan({ isLiving: false, sex: 'female' })).toBe('умерла')
+    expect(formatLifeSpan({ isLiving: false, sex: 'unknown' })).toBe('умер(ла)')
+  })
+
+  it('shows gender-specific deceased wording with partial dates', () => {
+    expect(formatLifeSpan({ isLiving: false, birthYear: 1920, sex: 'male' })).toBe('р. 1920 – умер')
+    expect(formatLifeSpan({ isLiving: false, birthYear: 1920, sex: 'female' })).toBe('р. 1920 – умерла')
+    expect(formatLifeSpan({ isLiving: false, deathYear: 1998, sex: 'female' })).toBe('умерла, 1998')
+  })
+})
+
+describe('deceasedLabel', () => {
+  it('returns gender-specific wording', () => {
+    expect(deceasedLabel('male')).toBe('умер')
+    expect(deceasedLabel('female')).toBe('умерла')
+    expect(deceasedLabel('unknown')).toBe('умер(ла)')
   })
 })
 

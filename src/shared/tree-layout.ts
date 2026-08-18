@@ -9,10 +9,11 @@ export const PEDIGREE_CARD_H = 52
 export const PEDIGREE_COUPLE_GAP = 28
 export const PEDIGREE_SIBLING_GAP = 40
 export const PEDIGREE_FAMILY_GAP = 80
+export const PEDIGREE_ROW_GAP = 16
 
-const CARD_CHROME_W = 56 // avatar 32 + gap 8 + padding 16
-const CHAR_W_PRIMARY = 7
-const CHAR_W_SECONDARY = 6.5
+const CARD_CHROME_W = 64 // avatar 32 + gap 8 + padding 16 + safety
+const CHAR_W_PRIMARY = 8
+const CHAR_W_SECONDARY = 7.5
 
 export interface PersonNameLines {
   primary: string
@@ -243,6 +244,108 @@ function centerPartnersAboveChildren(
   }
 }
 
+function cardLeft(id: string, positions: Map<string, { x: number; y: number }>, nodeWidths: Map<string, number>): number {
+  return positions.get(id)!.x - nodeWidth(id, nodeWidths) / 2
+}
+
+function cardRight(id: string, positions: Map<string, { x: number; y: number }>, nodeWidths: Map<string, number>): number {
+  return positions.get(id)!.x + nodeWidth(id, nodeWidths) / 2
+}
+
+function coupleBlockWidth(id: string, spouse: string | null, nodeWidths: Map<string, number>): number {
+  if (!spouse) return nodeWidth(id, nodeWidths)
+  return nodeWidth(id, nodeWidths) + PEDIGREE_COUPLE_GAP + nodeWidth(spouse, nodeWidths)
+}
+
+/** Сдвигает всех, кто правее якоря — относительная геометрия дерева сохраняется */
+function shiftTreeRightFrom(
+  minX: number,
+  dx: number,
+  positions: Map<string, { x: number; y: number }>
+) {
+  for (const [id, pos] of positions) {
+    if (pos.x >= minX - 0.01) positions.set(id, { x: pos.x + dx, y: pos.y })
+  }
+}
+
+/** Раздвигает пересекающиеся карточки слева направо, не разрывая пары */
+function resolveGenerationOverlaps(
+  nodeIds: string[],
+  generations: Map<string, number>,
+  positions: Map<string, { x: number; y: number }>,
+  nodeWidths: Map<string, number>
+) {
+  const gens = [...new Set([...generations.values()])].sort((a, b) => a - b)
+  for (const g of gens) {
+    const ids = nodeIds.filter((id) => positions.has(id) && (generations.get(id) ?? 0) === g)
+    const sorted = [...ids].sort((a, b) => cardLeft(a, positions, nodeWidths) - cardLeft(b, positions, nodeWidths))
+    for (let i = 1; i < sorted.length; i++) {
+      const prev = sorted[i - 1]
+      const curr = sorted[i]
+      const gap = cardLeft(curr, positions, nodeWidths) - cardRight(prev, positions, nodeWidths)
+      if (gap >= PEDIGREE_ROW_GAP) continue
+      const dx = PEDIGREE_ROW_GAP - gap
+      shiftTreeRightFrom(positions.get(curr)!.x, dx, positions)
+    }
+  }
+}
+
+function rightEdge(
+  personId: string,
+  positions: Map<string, { x: number; y: number }>,
+  nodeWidths: Map<string, number>,
+  generation: number,
+  partnerPairs: Array<[string, string]>,
+  generations: Map<string, number>,
+  placed: Set<string>
+): number {
+  const pos = positions.get(personId)
+  if (!pos) return 0
+  let edge = pos.x + nodeWidth(personId, nodeWidths) / 2
+  const spouse = partnerAt(personId, generation, partnerPairs, generations)
+  if (spouse && placed.has(spouse) && positions.has(spouse)) {
+    const spousePos = positions.get(spouse)!
+    edge = Math.max(edge, spousePos.x + nodeWidth(spouse, nodeWidths) / 2)
+  }
+  return edge
+}
+
+/** Дети уже на месте (через брак/другую ветку) — достраиваем родителей и сиблингов */
+function attachFamilyToPlacedChildren(
+  family: TreeFamily,
+  generations: Map<string, number>,
+  partnerPairs: Array<[string, string]>,
+  families: TreeFamily[],
+  positions: Map<string, { x: number; y: number }>,
+  placed: Set<string>,
+  widths: Map<string, number>,
+  nodeWidths: Map<string, number>
+) {
+  const placedKids = family.children.filter((c) => placed.has(c))
+  const unplacedKids = family.children.filter((c) => !placed.has(c))
+  if (placedKids.length === 0) return
+
+  const childGen = generations.get(family.children[0]) ?? 0
+
+  if (unplacedKids.length > 0) {
+    let cursor = Math.max(
+      ...placedKids.map((c) => rightEdge(c, positions, nodeWidths, childGen, partnerPairs, generations, placed))
+    )
+    for (const childId of unplacedKids) {
+      const spouse = partnerAt(childId, childGen, partnerPairs, generations)
+      const slotW =
+        widths.get(`child:${childId}`) ??
+        coupleBlockWidth(childId, spouse && !placed.has(spouse) ? spouse : null, nodeWidths)
+      const centerX = cursor + PEDIGREE_SIBLING_GAP + slotW / 2
+      placeChild(childId, centerX, generations, partnerPairs, families, positions, placed, widths, nodeWidths)
+      cursor = rightEdge(childId, positions, nodeWidths, childGen, partnerPairs, generations, placed)
+    }
+  }
+
+  centerPartnersAboveChildren(family, positions, generations, nodeWidths)
+  for (const id of [...family.partners, ...family.children]) placed.add(id)
+}
+
 function placeChild(
   childId: string,
   centerX: number,
@@ -295,8 +398,15 @@ function placeFamily(
   widths: Map<string, number>,
   nodeWidths: Map<string, number>
 ) {
+  if (family.children.some((c) => placed.has(c))) {
+    attachFamilyToPlacedChildren(family, generations, partnerPairs, families, positions, placed, widths, nodeWidths)
+    return
+  }
+
   const gen = Math.min(...family.partners.map((p) => generations.get(p) ?? 0))
-  placePartnerRow(family.partners, centerX, gen * PEDIGREE_NODE_H, positions, placed, nodeWidths)
+  if (!family.partners.some((p) => placed.has(p))) {
+    placePartnerRow(family.partners, centerX, gen * PEDIGREE_NODE_H, positions, placed, nodeWidths)
+  }
 
   if (family.children.length === 0) return
 
@@ -314,6 +424,7 @@ function placeFamily(
   }
 
   centerPartnersAboveChildren(family, positions, generations, nodeWidths)
+  for (const id of family.partners) placed.add(id)
 }
 
 export function layoutPedigreeTree(input: PedigreeLayoutInput): Map<string, { x: number; y: number }> {
@@ -333,6 +444,20 @@ export function layoutPedigreeTree(input: PedigreeLayoutInput): Map<string, { x:
 
   let cursor = 0
   for (const family of sortedRoots) {
+    if (family.children.some((c) => placed.has(c))) {
+      attachFamilyToPlacedChildren(
+        family,
+        generations,
+        input.partnerPairs,
+        input.families,
+        positions,
+        placed,
+        widths,
+        nodeWidths
+      )
+      continue
+    }
+
     const width = measureFamily(family, generations, input.partnerPairs, input.families, widths, nodeWidths, new Set())
     placeFamily(family, cursor + width / 2, generations, input.partnerPairs, input.families, positions, placed, widths, nodeWidths)
     cursor += width + PEDIGREE_FAMILY_GAP
@@ -345,6 +470,8 @@ export function layoutPedigreeTree(input: PedigreeLayoutInput): Map<string, { x:
     placed.add(id)
     cursor += w + PEDIGREE_FAMILY_GAP
   }
+
+  resolveGenerationOverlaps(input.nodeIds, generations, positions, nodeWidths)
 
   if (positions.size > 0) {
     const xs = [...positions.values()].map((p) => p.x)
@@ -372,6 +499,29 @@ export interface FamilyConnector {
   children: FamilyPoint[]
 }
 
+export type TreeLineKind = 'partner' | 'parent' | 'child' | 'sibling'
+
+export interface TreeLineSegment {
+  id: string
+  kind: TreeLineKind
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+}
+
+export const TREE_LINE_STYLES: Record<
+  TreeLineKind,
+  { stroke: string; strokeWidth: number; strokeDasharray?: string; strokeLinecap: 'square' | 'round' }
+> = {
+  partner: { stroke: '#dc2626', strokeWidth: 2, strokeDasharray: '6 4', strokeLinecap: 'round' },
+  sibling: { stroke: '#dc2626', strokeWidth: 2, strokeLinecap: 'square' },
+  parent: { stroke: '#171717', strokeWidth: 1.75, strokeLinecap: 'square' },
+  child: { stroke: '#171717', strokeWidth: 1.75, strokeLinecap: 'square' }
+}
+
+const CHILD_BAR_INSET = 10
+
 function pointsFor(ids: string[], positions: Map<string, { x: number; y: number }>): FamilyPoint[] {
   const points: FamilyPoint[] = []
   for (const id of ids) {
@@ -381,10 +531,25 @@ function pointsFor(ids: string[], positions: Map<string, { x: number; y: number 
   return points
 }
 
-/** Геометрия «вилки» семьи: брак под родителями, дети от перекладины */
+function coupleMidX(
+  parents: FamilyPoint[],
+  nodeWidths: Map<string, number>
+): number {
+  if (parents.length === 0) return 0
+  if (parents.length === 1) return parents[0].x
+  const sorted = [...parents].sort((a, b) => a.x - b.x)
+  const left = sorted[0]
+  const right = sorted[sorted.length - 1]
+  const innerLeft = left.x + nodeWidth(left.id, nodeWidths) / 2
+  const innerRight = right.x - nodeWidth(right.id, nodeWidths) / 2
+  return (innerLeft + innerRight) / 2
+}
+
+/** Геометрия «вилки» семьи: брак между родителями, дети от перекладины */
 export function buildFamilyConnectors(
   families: TreeFamily[],
-  positions: Map<string, { x: number; y: number }>
+  positions: Map<string, { x: number; y: number }>,
+  nodeWidths: Map<string, number> = new Map()
 ): FamilyConnector[] {
   const connectors: FamilyConnector[] = []
 
@@ -395,17 +560,13 @@ export function buildFamilyConnectors(
 
     const parentBottom = Math.min(...parents.map((p) => p.y)) + PEDIGREE_CARD_H
     const childTop = Math.min(...children.map((c) => c.y))
-    const gap = Math.max(24, childTop - parentBottom)
-    const unionX = parents.reduce((sum, p) => sum + p.x, 0) / parents.length
+    if (childTop <= parentBottom + 2) continue
 
-    let unionY: number
-    let childBarY: number
-    if (parents.length >= 2) {
-      unionY = parentBottom + Math.min(20, gap * 0.25)
-      childBarY = childTop - Math.min(20, gap * 0.25)
-    } else {
-      unionY = childBarY = parentBottom + gap / 2
-    }
+    const gap = childTop - parentBottom
+    const unionX = coupleMidX(parents, nodeWidths)
+    const childBarY = childTop - Math.min(CHILD_BAR_INSET, Math.max(6, gap * 0.22))
+    const unionY =
+      parents.length >= 2 ? Math.min(...parents.map((p) => p.y)) + PEDIGREE_CARD_H / 2 : parentBottom
 
     connectors.push({ familyId: family.id, unionX, unionY, childBarY, parents, children })
   }
@@ -413,49 +574,142 @@ export function buildFamilyConnectors(
   return connectors
 }
 
-export function familyConnectorPath(connector: FamilyConnector): string {
-  const parts: string[] = []
+export function familyConnectorSegments(
+  connector: FamilyConnector,
+  nodeWidths: Map<string, number> = new Map()
+): TreeLineSegment[] {
+  const segments: TreeLineSegment[] = []
+  const { familyId } = connector
 
-  for (const parent of connector.parents) {
-    parts.push(`M ${parent.x} ${parent.y + PEDIGREE_CARD_H} L ${parent.x} ${connector.unionY}`)
+  const pushSegment = (segment: TreeLineSegment) => {
+    if (Math.hypot(segment.x2 - segment.x1, segment.y2 - segment.y1) < 0.5) return
+    segments.push(segment)
   }
 
   if (connector.parents.length >= 2) {
-    const xs = connector.parents.map((p) => p.x)
-    parts.push(`M ${Math.min(...xs)} ${connector.unionY} L ${Math.max(...xs)} ${connector.unionY}`)
+    const sorted = [...connector.parents].sort((a, b) => a.x - b.x)
+    const left = sorted[0]
+    const right = sorted[sorted.length - 1]
+    const y = Math.min(left.y, right.y) + PEDIGREE_CARD_H / 2
+    const x1 = left.x + nodeWidth(left.id, nodeWidths) / 2
+    const x2 = right.x - nodeWidth(right.id, nodeWidths) / 2
+    pushSegment({
+      id: `${familyId}-partner`,
+      kind: 'partner',
+      x1,
+      y1: y,
+      x2,
+      y2: y
+    })
   }
 
-  parts.push(`M ${connector.unionX} ${connector.unionY} L ${connector.unionX} ${connector.childBarY}`)
+  const stemX = connector.unionX
+  pushSegment({
+    id: `${familyId}-stem`,
+    kind: 'parent',
+    x1: stemX,
+    y1: connector.unionY,
+    x2: stemX,
+    y2: connector.childBarY
+  })
 
   const childXs = connector.children.map((c) => c.x)
-  const barLeft = Math.min(connector.unionX, ...childXs)
-  const barRight = Math.max(connector.unionX, ...childXs)
-  if (barRight - barLeft > 1) {
-    parts.push(`M ${barLeft} ${connector.childBarY} L ${barRight} ${connector.childBarY}`)
+  const barLeft = Math.min(stemX, ...childXs)
+  const barRight = Math.max(stemX, ...childXs)
+  if (barRight - barLeft > 0.5) {
+    pushSegment({
+      id: `${familyId}-child-bar`,
+      kind: 'parent',
+      x1: barLeft,
+      y1: connector.childBarY,
+      x2: barRight,
+      y2: connector.childBarY
+    })
   }
 
   for (const child of connector.children) {
-    parts.push(`M ${child.x} ${connector.childBarY} L ${child.x} ${child.y}`)
+    pushSegment({
+      id: `${familyId}-child-${child.id}`,
+      kind: 'child',
+      x1: child.x,
+      y1: connector.childBarY,
+      x2: child.x,
+      y2: child.y
+    })
   }
 
-  return parts.join(' ')
+  const siblings = [...connector.children].sort((a, b) => a.x - b.x)
+  for (let i = 1; i < siblings.length; i++) {
+    const left = siblings[i - 1]
+    const right = siblings[i]
+    const line = siblingLineCoords(left, right, nodeWidth(left.id, nodeWidths), nodeWidth(right.id, nodeWidths))
+    pushSegment({
+      id: `${familyId}-sibling-${left.id}|${right.id}`,
+      kind: 'sibling',
+      ...line
+    })
+  }
+
+  return segments
+}
+
+/** @deprecated use familyConnectorSegments */
+export function familyConnectorPath(connector: FamilyConnector): string {
+  return familyConnectorSegments(connector)
+    .map((s) => `M ${s.x1} ${s.y1} L ${s.x2} ${s.y2}`)
+    .join(' ')
 }
 
 export function standalonePartnerPairs(
   partnerPairs: Array<[string, string]>,
   families: TreeFamily[]
 ): Array<[string, string]> {
-  const withChildren = new Set<string>()
+  const skip = new Set<string>()
   for (const family of families) {
-    if (family.children.length === 0 || family.partners.length < 2) continue
-    for (let i = 0; i < family.partners.length; i++) {
-      for (let j = i + 1; j < family.partners.length; j++) {
-        withChildren.add([family.partners[i], family.partners[j]].sort().join('|'))
+    if (family.children.length > 0 && family.partners.length >= 2) {
+      for (let i = 0; i < family.partners.length; i++) {
+        for (let j = i + 1; j < family.partners.length; j++) {
+          skip.add([family.partners[i], family.partners[j]].sort().join('|'))
+        }
+      }
+    }
+    for (let i = 0; i < family.children.length; i++) {
+      for (let j = i + 1; j < family.children.length; j++) {
+        skip.add([family.children[i], family.children[j]].sort().join('|'))
       }
     }
   }
 
-  return partnerPairs.filter(([a, b]) => !withChildren.has([a, b].sort().join('|')))
+  return partnerPairs.filter(([a, b]) => !skip.has([a, b].sort().join('|')))
+}
+
+function innerEdgeLine(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  widthA: number,
+  widthB: number,
+  yOffset: number
+): { x1: number; y1: number; x2: number; y2: number } {
+  const left = a.x <= b.x ? a : b
+  const right = a.x <= b.x ? b : a
+  const leftW = a.x <= b.x ? widthA : widthB
+  const rightW = a.x <= b.x ? widthB : widthA
+  const y = Math.min(left.y, right.y) + yOffset
+  return {
+    x1: left.x + leftW / 2,
+    y1: y,
+    x2: right.x - rightW / 2,
+    y2: y
+  }
+}
+
+export function siblingLineCoords(
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  widthA: number,
+  widthB: number
+): { x1: number; y1: number; x2: number; y2: number } {
+  return innerEdgeLine(a, b, widthA, widthB, PEDIGREE_CARD_H / 2)
 }
 
 export function partnerLineCoords(
@@ -464,15 +718,5 @@ export function partnerLineCoords(
   widthA: number,
   widthB: number
 ): { x1: number; y1: number; x2: number; y2: number } {
-  const left = a.x <= b.x ? a : b
-  const right = a.x <= b.x ? b : a
-  const leftW = a.x <= b.x ? widthA : widthB
-  const rightW = a.x <= b.x ? widthB : widthA
-  const y = Math.min(left.y, right.y) + PEDIGREE_CARD_H / 2
-  return {
-    x1: left.x + leftW / 2,
-    y1: y,
-    x2: right.x - rightW / 2,
-    y2: y
-  }
+  return innerEdgeLine(a, b, widthA, widthB, PEDIGREE_CARD_H / 2)
 }

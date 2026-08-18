@@ -108,6 +108,8 @@ function runMigrations(sqlite: Database.Database): void {
       family_id TEXT,
       place_id TEXT,
       description TEXT,
+      latitude REAL,
+      longitude REAL,
       date_year INTEGER,
       date_month INTEGER,
       date_day INTEGER,
@@ -213,6 +215,16 @@ function runMigrations(sqlite: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_citations_person ON citations(person_id);
     CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id);
   `)
+
+  ensureColumn(sqlite, 'events', 'latitude', 'REAL')
+  ensureColumn(sqlite, 'events', 'longitude', 'REAL')
+}
+
+function ensureColumn(sqlite: Database.Database, table: string, column: string, ddl: string): void {
+  const info = sqlite.pragma(`table_info(${table})`) as Array<{ name: string }>
+  if (!info.some((col) => col.name === column)) {
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`)
+  }
 }
 
 export function checkpointDatabase(): void {

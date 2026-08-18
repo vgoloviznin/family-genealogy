@@ -1,18 +1,19 @@
 import { eq, and, isNull, inArray } from 'drizzle-orm'
 import { getDatabase } from '../db/connection'
 import * as schema from '../db/schema'
-import { mapPerson, attachThumbs } from './people'
-import { buildProjectGraph, assignGenerationsFromFocus } from '@shared/tree-graph'
+import { mapPerson, attachThumbs, loadLifeYears } from './people'
+import { buildProjectGraph, assignGenerationsFromFocus, defaultTreeFocusId } from '@shared/tree-graph'
 import type { TreeData, TreeEdge, TreeNode, TreeFamily } from '@shared/types'
 
-function nodeType(focusId: string, personId: string, generation: number): TreeNode['type'] {
+function nodeType(focusId: string | null, personId: string, generation: number): TreeNode['type'] {
+  if (!focusId) return 'focus'
   if (personId === focusId) return 'focus'
   if (generation < 0) return 'ancestor'
   if (generation > 0) return 'descendant'
   return 'focus'
 }
 
-export async function getTree(personId: string, _generations?: number): Promise<TreeData> {
+export async function getTree(personId?: string | null, _generations?: number): Promise<TreeData> {
   const db = getDatabase()
 
   const peopleRows = await db
@@ -20,8 +21,9 @@ export async function getTree(personId: string, _generations?: number): Promise<
     .from(schema.people)
     .where(isNull(schema.people.deletedAt))
 
-  const focusRow = peopleRows.find((p) => p.id === personId)
-  if (!focusRow) throw new Error('Person not found')
+  if (peopleRows.length === 0) {
+    return { nodes: [], edges: [], families: [], focusPersonId: null }
+  }
 
   const families = await db
     .select()
@@ -58,16 +60,25 @@ export async function getTree(personId: string, _generations?: number): Promise<
 
   const graph = buildProjectGraph(partnersByFamily, childrenByFamily)
   const allPersonIds = peopleRows.map((p) => p.id)
-  const generations = assignGenerationsFromFocus(personId, allPersonIds, graph.partnerPairs, graph.parentPairs)
+  const treeFamilies: TreeFamily[] = families.map((family) => ({
+    id: family.id,
+    partners: partnersByFamily.get(family.id) ?? [],
+    children: childrenByFamily.get(family.id) ?? []
+  }))
+  const userFocus = personId && allPersonIds.includes(personId) ? personId : null
+  const layoutFocus =
+    userFocus ?? defaultTreeFocusId(allPersonIds, treeFamilies.flatMap((family) => family.children)) ?? allPersonIds[0]
+  const generations = assignGenerationsFromFocus(layoutFocus, allPersonIds, graph.partnerPairs, graph.parentPairs)
 
-  const peopleById = new Map(peopleRows.map((row) => [row.id, mapPerson(row)]))
+  const life = await loadLifeYears(allPersonIds)
+  const peopleById = new Map(peopleRows.map((row) => [row.id, mapPerson(row, life.get(row.id))]))
 
   const nodes: TreeNode[] = allPersonIds.map((id) => {
     const generation = generations.get(id) ?? 0
     return {
       id,
       person: peopleById.get(id)!,
-      type: nodeType(personId, id, generation),
+      type: nodeType(userFocus, id, generation),
       generation
     }
   })
@@ -89,16 +100,10 @@ export async function getTree(personId: string, _generations?: number): Promise<
     node.person = { ...node.person, thumbUrl: thumbById.get(node.id) ?? null }
   }
 
-  const treeFamilies: TreeFamily[] = families.map((family) => ({
-    id: family.id,
-    partners: partnersByFamily.get(family.id) ?? [],
-    children: childrenByFamily.get(family.id) ?? []
-  }))
-
   return {
     nodes,
     edges,
     families: treeFamilies,
-    focusPersonId: personId
+    focusPersonId: userFocus
   }
 }

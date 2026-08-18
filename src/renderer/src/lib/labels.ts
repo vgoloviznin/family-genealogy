@@ -112,23 +112,30 @@ export const SOURCE_TYPE_LABELS: Record<string, string> = {
   other: 'Другое'
 }
 
+export function deceasedLabel(sex?: Sex | null): string {
+  if (sex === 'male') return 'умер'
+  if (sex === 'female') return 'умерла'
+  return 'умер(ла)'
+}
+
 export function formatLifeSpan(p: {
   isLiving: boolean
   birthYear?: number | null
   deathYear?: number | null
+  sex?: Sex | null
 }): string {
   if (p.birthYear && p.deathYear) return `${p.birthYear}–${p.deathYear}`
   if (p.birthYear && p.isLiving) return `р. ${p.birthYear}`
-  if (p.birthYear) return `р. ${p.birthYear} – †`
-  if (p.deathYear) return `† ${p.deathYear}`
-  return p.isLiving ? 'жив' : 'умер(ла)'
+  if (p.birthYear) return `р. ${p.birthYear} – ${deceasedLabel(p.sex)}`
+  if (p.deathYear) return `${deceasedLabel(p.sex)}, ${p.deathYear}`
+  return p.isLiving ? 'жив' : deceasedLabel(p.sex)
 }
 
 /** События, неуместные для живого человека */
 export const DEATH_RELATED_EVENTS = new Set(['death', 'burial', 'cremation'])
 
 export const ADDABLE_EVENT_TYPES = Object.entries(EVENT_TYPE_LABELS).filter(
-  ([code]) => !['birth', 'death'].includes(code)
+  ([code]) => !['birth', 'death', 'burial'].includes(code)
 )
 
 export const emptyDate = (): PartialDate => ({

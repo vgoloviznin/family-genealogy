@@ -15,14 +15,16 @@ import type { TreeData, Person, TreeFamily, TreeNode } from '@shared/types'
 import {
   layoutPedigreeTree,
   buildFamilyConnectors,
-  familyConnectorPath,
+  familyConnectorSegments,
   standalonePartnerPairs,
   partnerLineCoords,
   buildPedigreeNodeWidths,
   compactNameLines,
-  estimatePedigreeCardWidth,
-  PEDIGREE_CARD_H
+  TREE_LINE_STYLES,
+  PEDIGREE_CARD_H,
+  type TreeLineSegment
 } from '@shared/tree-layout'
+import { defaultTreeFocusId } from '@shared/tree-graph'
 import { personLabel, personInitials, formatLifeSpan } from '../lib/labels'
 
 interface Props {
@@ -79,18 +81,17 @@ function CompactCard({ person, isFocus, isSelected }: { person: Person; isFocus:
   )
 }
 
-function ExpandedCard({ person, hint }: { person: Person; hint: string | null }) {
-  const cardWidth = Math.max(208, estimatePedigreeCardWidth(compactNameLines(person)) + 24)
+function ExpandedCard({ person, hint, cardWidth }: { person: Person; hint: string | null; cardWidth: number }) {
   return (
     <div
-      className="px-3 py-2.5 bg-white rounded-xl border-2 border-stone-800 shadow-md text-left"
+      className="px-2 py-1.5 bg-white rounded-lg border-2 border-stone-800 shadow-md text-left"
       style={{ width: cardWidth }}
     >
-      <div className="flex gap-2.5 items-start">
-        <TreeAvatar person={person} size="lg" />
+      <div className="flex gap-2 items-start">
+        <TreeAvatar person={person} size="sm" />
         <div className="min-w-0 flex-1">
-          <div className="font-serif font-semibold text-sm leading-snug text-stone-900 whitespace-nowrap">{personLabel(person)}</div>
-          <div className="text-xs tabular-nums text-stone-500 mt-0.5">{formatLifeSpan(person)}</div>
+          <div className="font-serif font-semibold text-[12px] leading-snug text-stone-900">{personLabel(person)}</div>
+          <div className="text-[10px] tabular-nums text-stone-500 mt-0.5">{formatLifeSpan(person)}</div>
           {hint ? <div className="text-[11px] text-stone-500 mt-1">{hint}</div> : null}
         </div>
       </div>
@@ -107,8 +108,8 @@ function PersonNode({ data }: { data: PersonNodeData }) {
     >
       <CompactCard person={data.person} isFocus={data.isFocus} isSelected={data.isSelected} />
       {data.isSelected ? (
-        <div className="absolute left-1/2 top-0 z-20 -translate-x-1/2 pointer-events-auto">
-          <ExpandedCard person={data.person} hint={data.hint} />
+        <div className="absolute left-0 top-0 z-20 pointer-events-auto">
+          <ExpandedCard person={data.person} hint={data.hint} cardWidth={data.cardWidth} />
         </div>
       ) : null}
     </div>
@@ -133,10 +134,11 @@ function childCount(personId: string, families: TreeFamily[]): number {
   return count
 }
 
-function relationHint(node: TreeNode, focusId: string, data: TreeData): string | null {
+function relationHint(node: TreeNode, focusId: string | null, data: TreeData): string | null {
   const children = childCount(node.id, data.families)
   const childPart = children > 0 ? `${children} ${children === 1 ? 'ребёнок' : children < 5 ? 'ребёнка' : 'детей'}` : null
 
+  if (!focusId) return childPart
   if (node.id === focusId) return childPart
 
   if (node.type === 'ancestor') {
@@ -163,13 +165,7 @@ function relationHint(node: TreeNode, focusId: string, data: TreeData): string |
   return childPart
 }
 
-function RelationshipLayer({
-  connectors,
-  partnerLines
-}: {
-  connectors: ReturnType<typeof buildFamilyConnectors>
-  partnerLines: Array<{ id: string; x1: number; y1: number; x2: number; y2: number }>
-}) {
+function RelationshipLayer({ segments }: { segments: TreeLineSegment[] }) {
   return (
     <ViewportPortal>
       <svg
@@ -177,44 +173,45 @@ function RelationshipLayer({
         height={1}
         style={{ position: 'absolute', overflow: 'visible', pointerEvents: 'none', zIndex: 0 }}
       >
-        {connectors.map((connector) => (
-          <path
-            key={connector.familyId}
-            d={familyConnectorPath(connector)}
-            fill="none"
-            stroke="#78716c"
-            strokeWidth={1.5}
-            strokeLinecap="square"
-          />
-        ))}
-        {partnerLines.map((line) => (
-          <line
-            key={line.id}
-            x1={line.x1}
-            y1={line.y1}
-            x2={line.x2}
-            y2={line.y2}
-            stroke="#a8a29e"
-            strokeWidth={1.5}
-            strokeLinecap="square"
-          />
-        ))}
+        {segments.map((segment) => {
+          const style = TREE_LINE_STYLES[segment.kind]
+          return (
+            <line
+              key={segment.id}
+              x1={segment.x1}
+              y1={segment.y1}
+              x2={segment.x2}
+              y2={segment.y2}
+              stroke={style.stroke}
+              strokeWidth={style.strokeWidth}
+              strokeDasharray={style.strokeDasharray ?? 'none'}
+              strokeLinecap={style.strokeLinecap}
+            />
+          )
+        })}
       </svg>
     </ViewportPortal>
   )
 }
 
-function FocusViewport({ focusId }: { focusId: string }) {
-  const { setCenter, getNode } = useReactFlow()
+function FocusViewport({ focusId }: { focusId: string | null }) {
+  const { setCenter, getNode, fitView } = useReactFlow()
 
   useEffect(() => {
+    if (!focusId) {
+      void fitView({ padding: 0.2, duration: 200 })
+      return
+    }
     const node = getNode(focusId)
-    if (!node) return
+    if (!node) {
+      void fitView({ padding: 0.2, duration: 200 })
+      return
+    }
     const width = typeof node.style?.width === 'number' ? node.style.width : Number(node.style?.width) || node.measured?.width || 148
     const x = node.position.x + width / 2
     const y = node.position.y + PEDIGREE_CARD_H / 2
     void setCenter(x, y, { zoom: 1, duration: 200 })
-  }, [focusId, getNode, setCenter])
+  }, [focusId, getNode, setCenter, fitView])
 
   return null
 }
@@ -226,22 +223,34 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
     const families = data.families ?? []
     const nodeWidths = buildPedigreeNodeWidths(data.nodes.map((n) => ({ id: n.id, ...n.person })))
 
+    const layoutFocus =
+      data.focusPersonId ?? defaultTreeFocusId(nodeIds, families.flatMap((family) => family.children)) ?? undefined
+
     const positions = layoutPedigreeTree({
       nodeIds,
-      focusId: data.focusPersonId,
+      focusId: layoutFocus,
       families,
       partnerPairs,
       nodeWidths
     })
 
-    const connectors = buildFamilyConnectors(families, positions)
+    const connectors = buildFamilyConnectors(families, positions, nodeWidths)
+    const lineSegments: TreeLineSegment[] = connectors.flatMap((connector) =>
+      familyConnectorSegments(connector, nodeWidths)
+    )
 
-    const partnerLines = standalonePartnerPairs(partnerPairs, families).flatMap(([a, b]) => {
+    for (const [a, b] of standalonePartnerPairs(partnerPairs, families)) {
       const pa = positions.get(a)
       const pb = positions.get(b)
-      if (!pa || !pb) return []
-      return [{ id: `${a}|${b}`, ...partnerLineCoords(pa, pb, nodeWidths.get(a)!, nodeWidths.get(b)!) }]
-    })
+      if (!pa || !pb || Math.abs(pa.y - pb.y) > 1) continue
+      const coords = partnerLineCoords(pa, pb, nodeWidths.get(a)!, nodeWidths.get(b)!)
+      if (coords.x2 - coords.x1 < 1) continue
+      lineSegments.push({
+        id: `partner-${a}|${b}`,
+        kind: 'partner',
+        ...coords
+      })
+    }
 
     const nodes: Node[] = data.nodes.map((n) => {
       const pos = positions.get(n.id) ?? { x: 0, y: 0 }
@@ -253,17 +262,17 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
         data: {
           person: n.person,
           cardWidth,
-          isFocus: n.id === data.focusPersonId,
+          isFocus: data.focusPersonId != null && n.id === data.focusPersonId,
           isSelected: n.id === selectedId,
           hint: relationHint(n, data.focusPersonId, data),
           onSelect: onSelectPerson
         },
         draggable: false,
-        style: { width: cardWidth, zIndex: n.id === selectedId ? 30 : n.id === data.focusPersonId ? 10 : 2 }
+        style: { width: cardWidth, zIndex: n.id === selectedId ? 30 : data.focusPersonId === n.id ? 10 : 2 }
       }
     })
 
-    return { nodes, connectors, partnerLines }
+    return { nodes, lineSegments }
   }, [data, selectedId, onSelectPerson])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layout.nodes)
@@ -299,7 +308,7 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
         nodesConnectable={false}
         proOptions={{ hideAttribution: true }}
       >
-        <RelationshipLayer connectors={layout.connectors} partnerLines={layout.partnerLines} />
+        <RelationshipLayer segments={layout.lineSegments} />
         <Background color="#a8a29e" gap={24} size={1} />
         <Controls showInteractive={false} className="tree-controls" />
         <FocusViewport focusId={data.focusPersonId} />

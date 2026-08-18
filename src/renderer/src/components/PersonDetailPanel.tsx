@@ -11,10 +11,12 @@ import type {
   Source,
   SourceType,
   PedigreeType,
-  UnionType
+  UnionType,
+  Sex
 } from '@shared/types'
 import { DateFields } from './DateFields'
 import { PlaceField } from './PlaceField'
+import { CoordinatesField } from './CoordinatesField'
 import { PersonAvatar } from './PersonAvatar'
 import {
   personLabel,
@@ -32,6 +34,7 @@ import {
   spouseLabel,
   siblingLabel
 } from '../lib/labels'
+import { formatCoordinates, parseCoordinates } from '@shared/coordinates'
 
 interface Props {
   person: PersonDetail
@@ -57,7 +60,9 @@ function buildFormFromPerson(person: PersonDetail) {
     birthDate: person.birthEvent?.date ?? emptyDate(),
     birthPlace: person.birthEvent?.placeName ?? '',
     deathDate: person.deathEvent?.date ?? emptyDate(),
-    deathPlace: person.deathEvent?.placeName ?? ''
+    deathPlace: person.deathEvent?.placeName ?? '',
+    burialPlace: person.burialEvent?.placeName ?? '',
+    burialCoords: formatCoordinates(person.burialEvent?.latitude, person.burialEvent?.longitude)
   }
 }
 
@@ -82,6 +87,15 @@ function snapshotPerson(p: PersonDetail): UpdatePersonInput {
           placeName: p.deathEvent?.placeName ?? '',
           date: p.deathEvent?.date ?? emptyDate(),
           description: p.deathEvent?.description ?? ''
+        },
+    burial: p.isLiving
+      ? null
+      : {
+          placeName: p.burialEvent?.placeName ?? '',
+          latitude: p.burialEvent?.latitude ?? null,
+          longitude: p.burialEvent?.longitude ?? null,
+          date: p.burialEvent?.date ?? emptyDate(),
+          description: p.burialEvent?.description ?? ''
         }
   }
 }
@@ -95,6 +109,8 @@ function snapshotEvent(ev: LifeEvent): UpsertEventInput & { id: string } {
     familyId: ev.familyId ?? undefined,
     placeName: ev.placeName ?? '',
     description: ev.description ?? '',
+    latitude: ev.latitude ?? null,
+    longitude: ev.longitude ?? null,
     date: ev.date
   }
 }
@@ -179,6 +195,11 @@ export function PersonDetailPanel({
           if (mode === 'manual') setSaveError('Укажите имя или фамилию')
           return false
         }
+        const burialCoords = current.isLiving ? null : parseCoordinates(current.burialCoords)
+        if (!current.isLiving && current.burialCoords.trim() && !burialCoords) {
+          setSaveError('Укажите координаты в формате: 55.7558, 37.6173')
+          return false
+        }
         setSaveError('')
         const p = personRef.current
         if (mode === 'manual') {
@@ -198,11 +219,16 @@ export function PersonDetailPanel({
             date: current.birthDate
           },
           ...(current.isLiving
-            ? { death: null }
+            ? { death: null, burial: null }
             : {
                 death: {
                   placeName: current.deathPlace,
                   date: current.deathDate
+                },
+                burial: {
+                  placeName: current.burialPlace,
+                  latitude: burialCoords?.latitude ?? null,
+                  longitude: burialCoords?.longitude ?? null
                 }
               })
         })
@@ -437,7 +463,9 @@ export function PersonDetailPanel({
                     setForm({
                       ...form,
                       isLiving,
-                      ...(isLiving ? { deathDate: emptyDate(), deathPlace: '' } : {})
+                      ...(isLiving
+                        ? { deathDate: emptyDate(), deathPlace: '', burialPlace: '', burialCoords: '' }
+                        : {})
                     })
                   }}
                 />
@@ -450,6 +478,16 @@ export function PersonDetailPanel({
               <>
                 <PlaceField label={t('death') + ' — ' + t('place')} value={form.deathPlace} onChange={(v) => setForm({ ...form, deathPlace: v })} />
                 <DateFields label={t('death')} value={form.deathDate} onChange={(d) => setForm({ ...form, deathDate: d })} />
+                <PlaceField
+                  label={t('burialPlace')}
+                  value={form.burialPlace}
+                  onChange={(v) => setForm({ ...form, burialPlace: v })}
+                />
+                <CoordinatesField
+                  label={t('coordinates')}
+                  value={form.burialCoords}
+                  onChange={(v) => setForm({ ...form, burialCoords: v })}
+                />
               </>
             )}
             <label className="block text-sm font-medium text-stone-700">
@@ -1059,6 +1097,7 @@ function RelRow({
     isLiving: boolean
     birthYear?: number | null
     deathYear?: number | null
+    sex?: Sex
   }
   onOpen: () => void
   extra?: ReactNode

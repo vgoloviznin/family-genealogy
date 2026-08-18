@@ -1,6 +1,6 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'
 
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export const people = sqliteTable('people', {
   id: text('id').primaryKey(),
@@ -69,6 +69,8 @@ export const events = sqliteTable('events', {
   familyId: text('family_id'),
   placeId: text('place_id'),
   description: text('description'),
+  latitude: real('latitude'),
+  longitude: real('longitude'),
   dateYear: integer('date_year'),
   dateMonth: integer('date_month'),
   dateDay: integer('date_day'),

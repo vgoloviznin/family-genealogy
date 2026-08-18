@@ -5,11 +5,16 @@ import {
   compactNameLines,
   estimatePedigreeCardWidth,
   familyConnectorPath,
+  familyConnectorSegments,
   layoutPedigreeTree,
   partnerLineCoords,
   standalonePartnerPairs,
+  TREE_LINE_STYLES,
+  PEDIGREE_CARD_H,
   PEDIGREE_NODE_H,
   PEDIGREE_NODE_MIN_W,
+  PEDIGREE_ROW_GAP,
+  PEDIGREE_SIBLING_GAP,
   type TreeFamily
 } from './tree-layout'
 
@@ -55,6 +60,11 @@ describe('assignLayoutGenerations', () => {
     expect(gens.get('p2')).toBe(-1)
     expect(gens.get('c1')).toBe(0)
   })
+
+  it('still stacks parents above children without a focus person', () => {
+    const gens = assignLayoutGenerations(['c1', 'p1'], [['p1', 'c1']], [])
+    expect(gens.get('p1')!).toBeLessThan(gens.get('c1')!)
+  })
 })
 
 describe('layoutPedigreeTree', () => {
@@ -86,7 +96,11 @@ describe('layoutPedigreeTree', () => {
     expect(positions.get('diana')!.y).toBe(positions.get('sabina')!.y)
     expect(positions.get('vsevolod')!.x).toBeLessThan(positions.get('diana')!.x)
     expect(positions.get('sabina')!.x).toBeGreaterThan(positions.get('diana')!.x)
-    expect(positions.get('nella')!.x).toBeLessThan(positions.get('davide')!.x)
+    expect(Math.abs(positions.get('vsevolod')!.x - positions.get('diana')!.x)).toBeLessThan(360)
+    expect(Math.abs(positions.get('davide')!.x - positions.get('diana')!.x)).toBeLessThan(360)
+    const treeWidth =
+      Math.max(...[...positions.values()].map((p) => p.x)) - Math.min(...[...positions.values()].map((p) => p.x))
+    expect(treeWidth).toBeLessThan(900)
   })
 
   it('keeps child order from the family record', () => {
@@ -110,11 +124,34 @@ describe('layoutPedigreeTree', () => {
     const connectors = buildFamilyConnectors(families, positions)
     expect(connectors).toHaveLength(1)
     expect(connectors[0].unionY).toBeGreaterThan(positions.get('p1')!.y)
-    expect(connectors[0].unionY).toBeLessThan(positions.get('c1')!.y)
+    expect(connectors[0].unionY).toBeLessThanOrEqual(connectors[0].childBarY)
+    expect(connectors[0].childBarY).toBeLessThanOrEqual(positions.get('c1')!.y)
     expect(Math.abs(connectors[0].unionX - positions.get('c1')!.x)).toBeLessThan(30)
+
+    const segments = familyConnectorSegments(connectors[0])
+    expect(segments.some((s) => s.kind === 'partner')).toBe(true)
+    expect(segments.some((s) => s.kind === 'parent' || s.kind === 'child')).toBe(true)
+    expect(segments.some((s) => s.kind === 'child' && s.y2 === positions.get('c1')!.y)).toBe(true)
+    expect(segments.some((s) => s.kind === 'sibling')).toBe(false)
 
     const path = familyConnectorPath(connectors[0])
     expect(path).toContain(`L ${positions.get('c1')!.x} ${positions.get('c1')!.y}`)
+  })
+
+  it('draws a black parent bar and a red sibling line for multiple children', () => {
+    const families: TreeFamily[] = [{ id: 'f1', partners: ['p1', 'p2'], children: ['c1', 'c2'] }]
+    const positions = layoutPedigreeTree({
+      nodeIds: ['p1', 'p2', 'c1', 'c2'],
+      families,
+      partnerPairs: [['p1', 'p2']]
+    })
+    const segments = familyConnectorSegments(buildFamilyConnectors(families, positions)[0])
+    const parentBar = segments.find((s) => s.id === 'f1-child-bar')
+    const sibling = segments.find((s) => s.kind === 'sibling')
+    expect(parentBar?.kind).toBe('parent')
+    expect(sibling).toBeTruthy()
+    expect(sibling!.y1).toBe(positions.get('c1')!.y + PEDIGREE_CARD_H / 2)
+    expect(sibling!.y1).not.toBe(parentBar!.y1)
   })
 
   it('does not draw a second partner line when the couple already has a marriage bar', () => {
@@ -126,6 +163,27 @@ describe('layoutPedigreeTree', () => {
       [golovizninFamily, valfreFamily]
     )
     expect(pairs).toEqual([['vsevolod', 'diana']])
+  })
+
+  it('does not treat siblings as spouses', () => {
+    const pairs = standalonePartnerPairs(
+      [
+        ['vsevolod', 'diana'],
+        ['diana', 'sabina']
+      ],
+      [golovizninFamily, valfreFamily]
+    )
+    expect(pairs).toEqual([['vsevolod', 'diana']])
+  })
+
+  it('uses dashed red for partners, solid red for siblings, solid black for parents', () => {
+    expect(TREE_LINE_STYLES.partner.strokeDasharray).toBeTruthy()
+    expect(TREE_LINE_STYLES.partner.stroke).toBe('#dc2626')
+    expect(TREE_LINE_STYLES.sibling.strokeDasharray).toBeUndefined()
+    expect(TREE_LINE_STYLES.sibling.stroke).toBe('#dc2626')
+    expect(TREE_LINE_STYLES.parent.stroke).toBe('#171717')
+    expect(TREE_LINE_STYLES.child.stroke).toBe('#171717')
+    expect(TREE_LINE_STYLES.parent.strokeDasharray).toBeUndefined()
   })
 
   it('uses fixed vertical spacing between generations', () => {
@@ -152,6 +210,85 @@ describe('layoutPedigreeTree', () => {
     expect(positions.get('c1')!.x).toBeLessThan(positions.get('c2')!.x)
     expect(positions.get('c2')!.x).toBeLessThan(positions.get('c3')!.x)
     expect(positions.get('p1')!.y).toBeLessThan(positions.get('c2')!.y)
+  })
+
+  it('does not overlap wide cards in the screenshot case', () => {
+    const nodeWidths = new Map([
+      ['nella', 260],
+      ['alexander', 280],
+      ['vsevolod', 300],
+      ['davide', 240],
+      ['diana', 280],
+      ['sabina', 260]
+    ])
+    const positions = layoutPedigreeTree({
+      nodeIds: ['nella', 'alexander', 'vsevolod', 'davide', 'diana', 'sabina'],
+      focusId: 'vsevolod',
+      families: [golovizninFamily, valfreFamily],
+      partnerPairs: [['nella', 'alexander'], ['vsevolod', 'diana']],
+      nodeWidths
+    })
+    const generations = assignLayoutGenerations(
+      ['nella', 'alexander', 'vsevolod', 'davide', 'diana', 'sabina'],
+      [
+        ['nella', 'vsevolod'],
+        ['alexander', 'vsevolod'],
+        ['davide', 'diana'],
+        ['davide', 'sabina']
+      ],
+      [['nella', 'alexander'], ['vsevolod', 'diana']],
+      'vsevolod'
+    )
+
+    const byGen = new Map<number, string[]>()
+    for (const id of nodeWidths.keys()) {
+      const g = generations.get(id) ?? 0
+      if (!byGen.has(g)) byGen.set(g, [])
+      byGen.get(g)!.push(id)
+    }
+
+    for (const ids of byGen.values()) {
+      const sorted = [...ids].sort((a, b) => positions.get(a)!.x - positions.get(b)!.x)
+      for (let i = 1; i < sorted.length; i++) {
+        const a = sorted[i - 1]
+        const b = sorted[i]
+        const gap =
+          positions.get(b)!.x -
+          nodeWidths.get(b)! / 2 -
+          (positions.get(a)!.x + nodeWidths.get(a)! / 2)
+        expect(gap).toBeGreaterThanOrEqual(PEDIGREE_ROW_GAP - 1)
+      }
+    }
+  })
+
+  it('places in-law siblings next to the couple, not a family-width away', () => {
+    const grandparents: TreeFamily = { id: 'f-gp', partners: ['svetlana', 'rafail'], children: ['alexander'] }
+    const nodeWidths = new Map([
+      ['svetlana', 260],
+      ['rafail', 240],
+      ['nella', 260],
+      ['alexander', 280],
+      ['vsevolod', 300],
+      ['davide', 240],
+      ['diana', 280],
+      ['sabina', 260]
+    ])
+    const positions = layoutPedigreeTree({
+      nodeIds: ['svetlana', 'rafail', 'nella', 'alexander', 'vsevolod', 'davide', 'diana', 'sabina'],
+      focusId: 'vsevolod',
+      families: [grandparents, golovizninFamily, valfreFamily],
+      partnerPairs: [['svetlana', 'rafail'], ['nella', 'alexander'], ['vsevolod', 'diana']],
+      nodeWidths
+    })
+
+    const dianaRight = positions.get('diana')!.x + nodeWidths.get('diana')! / 2
+    const sabinaLeft = positions.get('sabina')!.x - nodeWidths.get('sabina')! / 2
+    expect(sabinaLeft - dianaRight).toBeGreaterThanOrEqual(PEDIGREE_ROW_GAP - 1)
+    expect(sabinaLeft - dianaRight).toBeLessThan(PEDIGREE_SIBLING_GAP + 40)
+
+    const vsevolodRight = positions.get('vsevolod')!.x + nodeWidths.get('vsevolod')! / 2
+    const dianaLeft = positions.get('diana')!.x - nodeWidths.get('diana')! / 2
+    expect(dianaLeft - vsevolodRight).toBeGreaterThanOrEqual(PEDIGREE_ROW_GAP - 1)
   })
 
   it('draws partner line coords between spouse cards', () => {

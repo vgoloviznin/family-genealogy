@@ -21,5 +21,9 @@ vi.mock('electron', () => ({
   nativeImage: {
     createFromPath: () => ({ isEmpty: () => true }),
     createEmpty: () => ({ isEmpty: () => true })
+  },
+  shell: {
+    openExternal: vi.fn(async () => undefined),
+    openPath: vi.fn(async () => '')
   }
 }))

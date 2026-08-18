@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, protocol, net, nativeImage } from 'electron'
+import { app, BrowserWindow, Menu, protocol, net, nativeImage, shell } from 'electron'
 import { join } from 'path'
 import { pathToFileURL } from 'url'
 import iconPng from '../../resources/icon.png?asset'
@@ -61,6 +61,13 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => mainWindow?.show())
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https://') || url.startsWith('http://')) {
+      void shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
 
   if (process.env.ELECTRON_RENDERER_URL) {
     mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)

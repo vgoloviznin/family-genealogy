@@ -162,6 +162,7 @@ export interface Person {
 export interface PersonDetail extends Person {
   birthEvent?: LifeEvent | null
   deathEvent?: LifeEvent | null
+  burialEvent?: LifeEvent | null
   families: FamilySummary[]
   associations: AssociationView[]
   events: LifeEvent[]
@@ -178,6 +179,8 @@ export interface LifeEvent {
   placeId?: string | null
   placeName?: string | null
   description?: string | null
+  latitude?: number | null
+  longitude?: number | null
   date: PartialDate
   createdAt: string
   updatedAt: string
@@ -258,7 +261,7 @@ export interface TreeData {
   nodes: TreeNode[]
   edges: TreeEdge[]
   families: TreeFamily[]
-  focusPersonId: string
+  focusPersonId: string | null
 }
 
 export interface RecentProject {
@@ -292,12 +295,15 @@ export interface CreatePersonInput {
   notes?: string
   birth?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>>
   death?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>>
+  burial?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>>
 }
 
-export interface UpdatePersonInput extends Partial<Omit<CreatePersonInput, 'death'>> {
+export interface UpdatePersonInput extends Partial<Omit<CreatePersonInput, 'death' | 'burial'>> {
   id: string
   /** null — удалить событие смерти (например, при отметке «жив») */
   death?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>> | null
+  /** null — удалить место захоронения */
+  burial?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>> | null
 }
 
 export interface UpsertEventInput {
@@ -308,6 +314,8 @@ export interface UpsertEventInput {
   familyId?: string
   placeName?: string
   description?: string
+  latitude?: number | null
+  longitude?: number | null
   date: PartialDate
 }
 
@@ -425,7 +433,7 @@ export interface Api {
     delete: (id: string) => Promise<void>
   }
   tree: {
-    get: (personId: string, generations?: number) => Promise<TreeData>
+    get: (personId?: string | null, generations?: number) => Promise<TreeData>
   }
   pack: {
     export: () => Promise<string | null>

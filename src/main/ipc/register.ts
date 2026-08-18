@@ -81,7 +81,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.CITATIONS_CREATE, wrap((input) => sources.createCitation(input)))
   ipcMain.handle(IPC_CHANNELS.CITATIONS_DELETE, wrap((id: string) => sources.deleteCitation(id)))
 
-  ipcMain.handle(IPC_CHANNELS.TREE_GET, wrap((personId: string, gens?: number) => tree.getTree(personId, gens)))
+  ipcMain.handle(IPC_CHANNELS.TREE_GET, wrap((personId?: string | null, gens?: number) => tree.getTree(personId, gens)))
 
   ipcMain.handle(IPC_CHANNELS.PACK_EXPORT, wrap(() => pack.exportProject()))
   ipcMain.handle(IPC_CHANNELS.PACK_IMPORT, wrap(() => pack.importProject()))

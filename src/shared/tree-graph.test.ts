@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assignGenerationsFromFocus, buildProjectGraph } from './tree-graph'
+import { assignGenerationsFromFocus, buildProjectGraph, defaultTreeFocusId } from './tree-graph'
 
 describe('buildProjectGraph', () => {
   it('builds sibling pairs for three children', () => {
@@ -61,5 +61,19 @@ describe('assignGenerationsFromFocus', () => {
   it('assigns generation 0 to people without family links', () => {
     const gens = assignGenerationsFromFocus('focus', ['focus', 'lonely'], [], [])
     expect(gens.get('lonely')).toBe(0)
+  })
+})
+
+describe('defaultTreeFocusId', () => {
+  it('returns null when there are no people', () => {
+    expect(defaultTreeFocusId([], [])).toBeNull()
+  })
+
+  it('prefers a person who is not a child', () => {
+    expect(defaultTreeFocusId(['c1', 'p1', 'c2'], ['c1', 'c2'])).toBe('p1')
+  })
+
+  it('falls back to the first person', () => {
+    expect(defaultTreeFocusId(['a', 'b'], [])).toBe('a')
   })
 })

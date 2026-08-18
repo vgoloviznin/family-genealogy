@@ -29,6 +29,8 @@ const resources = {
       notes: 'Заметки',
       birth: 'Рождение',
       death: 'Смерть',
+      burialPlace: 'Место захоронения',
+      coordinates: 'Координаты',
       family: 'Семья',
       events: 'События',
       associations: 'Связи',

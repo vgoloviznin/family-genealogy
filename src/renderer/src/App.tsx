@@ -55,6 +55,7 @@ export default function App() {
     setProject(meta)
     setSelectedId(null)
     setPersonDetail(null)
+    setTreeData(null)
     dirtyRef.current = false
     await refreshPeople()
     setRecents(normalizeRecentProjects(await window.api.project.getRecents()))
@@ -104,10 +105,15 @@ export default function App() {
     if (selectedId) void refreshPerson(selectedId)
   }, [selectedId, refreshPerson])
 
-  const refreshTree = useCallback(async (personId: string) => {
-    const tree = await window.api.tree.get(personId)
-    setTreeData(tree)
-  }, [])
+  const refreshTree = useCallback(async (personId?: string | null) => {
+    try {
+      const tree = personId ? await window.api.tree.get(personId) : await window.api.tree.get()
+      setTreeData(tree)
+    } catch (e) {
+      setTreeData({ nodes: [], edges: [], families: [], focusPersonId: null })
+      showToast((e as Error).message, 'error')
+    }
+  }, [showToast])
 
   const familyTreeKey =
     personDetail?.id === selectedId
@@ -115,7 +121,7 @@ export default function App() {
       : ''
 
   useEffect(() => {
-    if (view === 'tree' && selectedId) {
+    if (view === 'tree') {
       void refreshTree(selectedId)
     }
   }, [view, selectedId, familyTreeKey, people.length, refreshTree])
@@ -247,7 +253,6 @@ export default function App() {
         <button
           className="text-sm px-3 py-1 rounded border"
           onClick={() => void flushThen(() => setView('tree'))}
-          disabled={!selectedId}
         >
           {t('tree')}
         </button>
@@ -349,6 +354,11 @@ export default function App() {
           <>
             <div className="flex-1 min-w-0">
               {treeData ? (
+                treeData.nodes.length === 0 ? (
+                  <div className="h-full flex items-center justify-center text-stone-500 bg-[#f4f1eb] rounded-lg border border-stone-200">
+                    Добавьте человека, чтобы увидеть древо
+                  </div>
+                ) : (
                 <TreeView
                   data={treeData}
                   selectedId={selectedId}
@@ -359,6 +369,7 @@ export default function App() {
                     })
                   }}
                 />
+                )
               ) : (
                 <div className="h-full flex items-center justify-center text-stone-500 bg-[#f4f1eb] rounded-lg border border-stone-200">
                   Загрузка древа…

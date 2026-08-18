@@ -78,6 +78,8 @@ function mapEvent(row: EventRow, placeName?: string | null): LifeEvent {
     placeId: row.placeId,
     placeName: placeName ?? null,
     description: row.description,
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
     date: {
       year: row.dateYear,
       month: row.dateMonth,
@@ -133,6 +135,8 @@ export async function upsertEventRecord(input: {
   familyId?: string
   placeName?: string
   description?: string
+  latitude?: number | null
+  longitude?: number | null
   date?: PartialDate
 }): Promise<LifeEvent> {
   const db = getDatabase()
@@ -149,6 +153,8 @@ export async function upsertEventRecord(input: {
     familyId: input.familyId ?? null,
     placeId,
     description: input.description ?? null,
+    latitude: input.latitude ?? null,
+    longitude: input.longitude ?? null,
     dateYear: date.year ?? null,
     dateMonth: date.month ?? null,
     dateDay: date.day ?? null,
@@ -240,7 +246,8 @@ export async function getPersonDetail(id: string): Promise<PersonDetail | null> 
 
   const birthEvent = mappedEvents.find((e) => e.type === 'birth') ?? null
   const deathEvent = mappedEvents.find((e) => e.type === 'death') ?? null
-  const otherEvents = mappedEvents.filter((e) => e.type !== 'birth' && e.type !== 'death')
+  const burialEvent = mappedEvents.find((e) => e.type === 'burial') ?? null
+  const otherEvents = mappedEvents.filter((e) => e.type !== 'birth' && e.type !== 'death' && e.type !== 'burial')
 
   const familyEvents = await db
     .select()
@@ -262,6 +269,7 @@ export async function getPersonDetail(id: string): Promise<PersonDetail | null> 
     ...person,
     birthEvent,
     deathEvent,
+    burialEvent,
     events: otherEvents,
     families: partnerFamilyIds,
     associations: await listAssociationsForPerson(id),
@@ -309,6 +317,18 @@ export async function createPerson(input: CreatePersonInput): Promise<PersonDeta
       placeName: input.death.placeName,
       description: input.death.description,
       date: input.death.date ?? defaultDate()
+    })
+  }
+
+  if (input.burial) {
+    await upsertEventRecord({
+      type: 'burial',
+      personId: id,
+      placeName: input.burial.placeName,
+      description: input.burial.description,
+      latitude: input.burial.latitude,
+      longitude: input.burial.longitude,
+      date: input.burial.date ?? defaultDate()
     })
   }
 
@@ -365,6 +385,22 @@ export async function updatePerson(input: UpdatePersonInput): Promise<PersonDeta
     })
   }
 
+  if (input.burial === null) {
+    if (detail.burialEvent?.id) await deleteEvent(detail.burialEvent.id)
+  } else if (input.burial !== undefined) {
+    const burialId = detail.burialEvent?.id
+    await upsertEventRecord({
+      id: burialId,
+      type: 'burial',
+      personId: input.id,
+      placeName: input.burial?.placeName,
+      description: input.burial?.description ?? detail.burialEvent?.description ?? undefined,
+      latitude: input.burial?.latitude ?? null,
+      longitude: input.burial?.longitude ?? null,
+      date: input.burial?.date ?? detail.burialEvent?.date ?? defaultDate()
+    })
+  }
+
   return (await getPersonDetail(input.id))!
 }
 
@@ -389,7 +425,12 @@ export async function restorePerson(id: string): Promise<void> {
 export async function listEventsForPerson(personId: string): Promise<LifeEvent[]> {
   const detail = await getPersonDetail(personId)
   if (!detail) return []
-  const all = [...(detail.birthEvent ? [detail.birthEvent] : []), ...(detail.deathEvent ? [detail.deathEvent] : []), ...detail.events]
+  const all = [
+    ...(detail.birthEvent ? [detail.birthEvent] : []),
+    ...(detail.deathEvent ? [detail.deathEvent] : []),
+    ...(detail.burialEvent ? [detail.burialEvent] : []),
+    ...detail.events
+  ]
   return all.sort((a, b) => (b.date.sortKey ?? 0) - (a.date.sortKey ?? 0))
 }
 
@@ -407,6 +448,8 @@ export async function restoreEvent(input: {
   familyId?: string
   placeName?: string
   description?: string
+  latitude?: number | null
+  longitude?: number | null
   date?: PartialDate
 }): Promise<LifeEvent> {
   const db = getDatabase()
@@ -433,4 +476,4 @@ export async function searchPlaces(query: string): Promise<Array<{ id: string; n
   return rows
 }
 
-export { mapPerson }
+export { mapPerson, loadLifeYears }
