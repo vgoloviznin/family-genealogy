@@ -11,6 +11,7 @@ const api: Api = {
     close: () => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_CLOSE),
     getCurrent: () => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_GET_CURRENT),
     getRecents: () => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_GET_RECENTS),
+    setName: (name) => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_SET_NAME, name),
     checkCloudPath: (path) => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_CHECK_CLOUD_PATH, path),
     onOpened: (callback) => {
       const handler = (_: unknown, meta: ProjectMeta) => callback(meta)

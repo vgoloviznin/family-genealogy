@@ -5,6 +5,7 @@ export const IPC_CHANNELS = {
   PROJECT_CLOSE: 'project:close',
   PROJECT_GET_CURRENT: 'project:getCurrent',
   PROJECT_GET_RECENTS: 'project:getRecents',
+  PROJECT_SET_NAME: 'project:setName',
   PROJECT_CHECK_CLOUD_PATH: 'project:checkCloudPath',
 
   PEOPLE_LIST: 'people:list',
@@ -260,6 +261,11 @@ export interface TreeData {
   focusPersonId: string
 }
 
+export interface RecentProject {
+  path: string
+  name: string
+}
+
 export interface AppSettings {
   deviceId: string
   editorLabel: string
@@ -351,7 +357,8 @@ export interface Api {
     openPath: (path: string) => Promise<ProjectMeta>
     close: () => Promise<void>
     getCurrent: () => Promise<ProjectMeta | null>
-    getRecents: () => Promise<string[]>
+    getRecents: () => Promise<RecentProject[]>
+    setName: (name: string) => Promise<ProjectMeta>
     checkCloudPath: (path: string) => Promise<boolean>
     onOpened: (callback: (meta: ProjectMeta) => void) => () => void
   }

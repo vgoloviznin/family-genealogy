@@ -27,7 +27,8 @@ export function registerIpcHandlers(): void {
     project.closeProject()
   }))
   ipcMain.handle(IPC_CHANNELS.PROJECT_GET_CURRENT, wrap(() => project.getCurrentProject()))
-  ipcMain.handle(IPC_CHANNELS.PROJECT_GET_RECENTS, wrap(() => settings.getSettings().recentProjects))
+  ipcMain.handle(IPC_CHANNELS.PROJECT_GET_RECENTS, wrap(() => project.listRecentProjects()))
+  ipcMain.handle(IPC_CHANNELS.PROJECT_SET_NAME, wrap((name: string) => project.updateProjectName(name)))
   ipcMain.handle(IPC_CHANNELS.PROJECT_CHECK_CLOUD_PATH, wrap((path: string) => isCloudSyncedPath(path)))
 
   ipcMain.handle(IPC_CHANNELS.PEOPLE_LIST, wrap(() => people.listPeople()))

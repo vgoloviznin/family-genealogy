@@ -1,13 +1,13 @@
 import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync } from 'fs'
-import { join } from 'path'
+import { basename, join } from 'path'
 import { dialog } from 'electron'
 import { openDatabase, closeDatabase } from '../db/connection'
 import { SCHEMA_VERSION } from '../db/schema'
 import { newId, nowIso } from '../utils/id'
 import { isCloudSyncedPath } from '../utils/paths'
-import { addRecentProject } from './settings'
+import { addRecentProject, getSettings, pruneRecentProjects } from './settings'
 import { clearUndo } from './undo'
-import type { ProjectMeta } from '@shared/types'
+import type { ProjectMeta, RecentProject } from '@shared/types'
 
 export interface ProjectJson {
   projectId: string
@@ -120,10 +120,41 @@ export function getProjectJson(projectPath: string): ProjectJson {
   return readProjectJson(projectPath)
 }
 
-export function updateProjectName(name: string): void {
+export function listRecentProjects(): RecentProject[] {
+  const recents: RecentProject[] = []
+  const missing: string[] = []
+
+  for (const entry of getSettings().recentProjects) {
+    const projectPath = typeof entry === 'string' ? entry : ''
+    if (!projectPath) continue
+    const jsonFile = join(projectPath, 'project.json')
+    if (!existsSync(jsonFile)) {
+      missing.push(projectPath)
+      continue
+    }
+    try {
+      const json = readProjectJson(projectPath)
+      const name = typeof json.name === 'string' ? json.name.trim() : ''
+      recents.push({
+        path: projectPath,
+        name: name || basename(projectPath)
+      })
+    } catch {
+      recents.push({ path: projectPath, name: basename(projectPath) })
+    }
+  }
+
+  if (missing.length > 0) pruneRecentProjects(missing)
+  return recents
+}
+
+export function updateProjectName(name: string): ProjectMeta {
+  const trimmed = name.trim()
+  if (!trimmed) throw new Error('Название проекта не может быть пустым')
   const project = requireProject()
   const json = readProjectJson(project.path)
-  json.name = name
+  json.name = trimmed
   writeProjectJson(project.path, json)
-  currentProject = { ...project, name }
+  currentProject = { ...project, name: trimmed }
+  return currentProject
 }

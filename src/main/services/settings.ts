@@ -51,6 +51,13 @@ export function addRecentProject(path: string): void {
   getStore().set('recentProjects', filtered.slice(0, 10))
 }
 
+export function pruneRecentProjects(missingPaths: string[]): void {
+  if (missingPaths.length === 0) return
+  const drop = new Set(missingPaths)
+  const filtered = getSettings().recentProjects.filter((p) => !drop.has(p))
+  getStore().set('recentProjects', filtered)
+}
+
 export function getDeviceMeta(): { deviceId: string; label: string } {
   const s = getSettings()
   return { deviceId: s.deviceId, label: s.editorLabel }

@@ -4,7 +4,8 @@ import { initReactI18next } from 'react-i18next'
 const resources = {
   ru: {
     translation: {
-      appTitle: 'Семейное древо',
+      appTitle: 'Моё семейное древо',
+      appTitleWithProject: 'Моё семейное древо: {{name}}',
       createProject: 'Создать проект',
       openProject: 'Открыть проект',
       importProject: 'Импорт .fgtree',

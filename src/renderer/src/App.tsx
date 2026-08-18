@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { ProjectMeta, Person, PersonDetail, TreeData, AppSettings, MenuCommand } from '@shared/types'
+import type { ProjectMeta, Person, PersonDetail, TreeData, AppSettings, MenuCommand, RecentProject } from '@shared/types'
+import { normalizeRecentProjects } from '@shared/recents'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { PersonDetailPanel } from './components/PersonDetailPanel'
 import { PersonAvatar } from './components/PersonAvatar'
@@ -11,7 +12,7 @@ import appIcon from './assets/icon.png'
 export default function App() {
   const { t } = useTranslation()
   const [project, setProject] = useState<ProjectMeta | null>(null)
-  const [recents, setRecents] = useState<string[]>([])
+  const [recents, setRecents] = useState<RecentProject[]>([])
   const [people, setPeople] = useState<Person[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [personDetail, setPersonDetail] = useState<PersonDetail | null>(null)
@@ -58,7 +59,7 @@ export default function App() {
     setPersonDetail(null)
     dirtyRef.current = false
     await refreshPeople()
-    setRecents(await window.api.project.getRecents())
+    setRecents(normalizeRecentProjects(await window.api.project.getRecents()))
   }, [refreshPeople])
 
   const selectPerson = useCallback((id: string | null) => {
@@ -73,7 +74,7 @@ export default function App() {
     void window.api.project.getCurrent().then((p) => {
       if (p) void loadProject(p)
     })
-    void window.api.project.getRecents().then(setRecents)
+    void window.api.project.getRecents().then((raw) => setRecents(normalizeRecentProjects(raw)))
     void window.api.settings.get().then(setSettings)
 
     const unsubProgress = window.api.pack.onProgress((p) => {
@@ -88,6 +89,14 @@ export default function App() {
       unsubOpened()
     }
   }, [loadProject])
+
+  useEffect(() => {
+    if (project) {
+      document.title = t('appTitleWithProject', { name: project.name })
+    } else {
+      document.title = t('appTitle')
+    }
+  }, [project, t])
 
   useEffect(() => {
     if (project) void refreshPeople()
@@ -214,6 +223,7 @@ export default function App() {
           onOpen={() => void handleOpen()}
           onImport={() => void handleImport()}
           onOpenRecent={async (path) => {
+            if (!path) return
             try {
               setError('')
               const meta = await window.api.project.openPath(path)
@@ -231,7 +241,7 @@ export default function App() {
     <div className="h-screen flex flex-col bg-[#f4f1eb]">
       <header className="flex items-center gap-4 px-4 py-3 bg-white border-b border-stone-200 shadow-sm">
         <img src={appIcon} alt="" width={28} height={28} className="w-7 h-7" />
-        <h1 className="font-serif text-lg text-stone-800">{project.name}</h1>
+        <h1 className="font-serif text-lg text-stone-800">{t('appTitleWithProject', { name: project.name })}</h1>
         {project.cloudWarning && (
           <span className="text-xs bg-amber-100 text-amber-900 px-2 py-1 rounded">{t('cloudWarning')}</span>
         )}
@@ -367,10 +377,15 @@ export default function App() {
       {settingsOpen && settings && (
         <SettingsModal
           settings={settings}
+          projectName={project.name}
           onClose={() => setSettingsOpen(false)}
-          onSave={async (partial) => {
+          onSave={async (partial, name) => {
             const s = await window.api.settings.set(partial)
             setSettings(s)
+            if (name.trim() && name.trim() !== project.name) {
+              const meta = await window.api.project.setName(name)
+              setProject(meta)
+            }
             setSettingsOpen(false)
           }}
         />
@@ -381,14 +396,17 @@ export default function App() {
 
 function SettingsModal({
   settings,
+  projectName,
   onClose,
   onSave
 }: {
   settings: AppSettings
+  projectName: string
   onClose: () => void
-  onSave: (p: Partial<AppSettings>) => Promise<void>
+  onSave: (partial: Partial<AppSettings>, projectName: string) => Promise<void>
 }) {
   const { t } = useTranslation()
+  const [name, setName] = useState(projectName)
   const [backupFolder, setBackupFolder] = useState(settings.backupFolder ?? '')
   const [backupOnQuit, setBackupOnQuit] = useState(settings.backupOnQuit)
   const [backupKeepCount, setBackupKeepCount] = useState(settings.backupKeepCount)
@@ -398,6 +416,10 @@ function SettingsModal({
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl p-6 w-full max-w-md space-y-4 shadow-xl">
         <h2 className="text-lg font-medium">{t('settings')}</h2>
+        <label className="block text-sm">
+          {t('projectName')}
+          <input className="w-full border rounded px-2 py-1 mt-1" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
         <label className="block text-sm">
           {t('editorLabel')}
           <input className="w-full border rounded px-2 py-1 mt-1" value={editorLabel} onChange={(e) => setEditorLabel(e.target.value)} />
@@ -431,9 +453,10 @@ function SettingsModal({
             {t('cancel')}
           </button>
           <button
-            className="px-4 py-2 rounded bg-stone-800 text-white"
+            className="px-4 py-2 rounded bg-stone-800 text-white disabled:opacity-50"
+            disabled={!name.trim()}
             onClick={() =>
-              void onSave({ backupFolder: backupFolder || undefined, backupOnQuit, backupKeepCount, editorLabel })
+              void onSave({ backupFolder: backupFolder || undefined, backupOnQuit, backupKeepCount, editorLabel }, name)
             }
           >
             {t('save')}
