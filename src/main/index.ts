@@ -1,0 +1,152 @@
+import { app, BrowserWindow, Menu, protocol, net } from 'electron/main'
+import { join } from 'path'
+import { pathToFileURL } from 'url'
+import { registerIpcHandlers } from './ipc/register'
+import { resolveMediaPath } from './services/media'
+import { backupOnQuitIfEnabled, handleOpenFgtreeFile } from './services/pack'
+import { closeProject } from './services/project'
+
+let mainWindow: BrowserWindow | null = null
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'family-media',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true
+    }
+  }
+])
+
+function createWindow(): void {
+  mainWindow = new BrowserWindow({
+    width: 1280,
+    height: 860,
+    minWidth: 960,
+    minHeight: 640,
+    show: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  })
+
+  mainWindow.on('ready-to-show', () => mainWindow?.show())
+
+  if (process.env.ELECTRON_RENDERER_URL) {
+    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+  } else {
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
+}
+
+function buildMenu(): void {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: 'Файл',
+      submenu: [
+        { label: 'Создать проект', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('menu:command', 'createProject') },
+        { label: 'Открыть проект', accelerator: 'CmdOrCtrl+O', click: () => mainWindow?.webContents.send('menu:command', 'openProject') },
+        { type: 'separator' },
+        { label: 'Импорт .fgtree', click: () => mainWindow?.webContents.send('menu:command', 'import') },
+        { label: 'Экспорт .fgtree', click: () => mainWindow?.webContents.send('menu:command', 'export') },
+        { label: 'Бэкап', click: () => mainWindow?.webContents.send('menu:command', 'backup') },
+        { label: 'Восстановить', click: () => mainWindow?.webContents.send('menu:command', 'restore') },
+        { type: 'separator' },
+        { role: 'quit', label: 'Выход' }
+      ]
+    },
+    {
+      label: 'Правка',
+      submenu: [
+        { label: 'Отменить', accelerator: 'CmdOrCtrl+Z', click: () => mainWindow?.webContents.send('menu:command', 'undo') },
+        { role: 'cut' },
+        { role: 'copy' },
+        { role: 'paste' },
+        { role: 'selectAll' }
+      ]
+    },
+    {
+      label: 'Вид',
+      submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }]
+    }
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv) => {
+    const fgtree = argv.find((a) => a.endsWith('.fgtree'))
+    if (fgtree && mainWindow) {
+      handleOpenFgtreeFile(fgtree).then((meta) => {
+        if (meta) mainWindow?.webContents.send('project:opened', meta)
+      })
+    }
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore()
+      mainWindow.focus()
+    }
+  })
+
+  app.whenReady().then(() => {
+    protocol.handle('family-media', (request) => {
+      const url = new URL(request.url)
+      const relative = decodeURIComponent(url.pathname.slice(1))
+      const filePath = resolveMediaPath(relative)
+      if (!filePath) return new Response(null, { status: 404 })
+      return net.fetch(pathToFileURL(filePath).toString())
+    })
+
+    registerIpcHandlers()
+    buildMenu()
+    createWindow()
+
+    const fgtreeArg = process.argv.find((a) => a.endsWith('.fgtree'))
+    if (fgtreeArg) {
+      handleOpenFgtreeFile(fgtreeArg).then((meta) => {
+        if (meta) mainWindow?.webContents.send('project:opened', meta)
+      })
+    }
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    })
+  })
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') app.quit()
+  })
+
+let quitting = false
+
+  app.on('before-quit', (e) => {
+    if (quitting) return
+    e.preventDefault()
+    quitting = true
+    void backupOnQuitIfEnabled()
+      .catch(() => undefined)
+      .finally(() => {
+        closeProject()
+        app.exit(0)
+      })
+  })
+
+  app.on('open-file', (event, filePath) => {
+    event.preventDefault()
+    if (filePath.endsWith('.fgtree')) {
+      handleOpenFgtreeFile(filePath).then((meta) => {
+        if (meta) mainWindow?.webContents.send('project:opened', meta)
+      })
+    }
+  })
+}
+
+export { mainWindow }
