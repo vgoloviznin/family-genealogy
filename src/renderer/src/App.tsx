@@ -98,7 +98,7 @@ export default function App() {
   }, [selectedId, refreshPerson])
 
   const refreshTree = useCallback(async (personId: string) => {
-    const tree = await window.api.tree.get(personId, 4)
+    const tree = await window.api.tree.get(personId)
     setTreeData(tree)
   }, [])
 
@@ -111,7 +111,7 @@ export default function App() {
     if (view === 'tree' && selectedId) {
       void refreshTree(selectedId)
     }
-  }, [view, selectedId, familyTreeKey, refreshTree])
+  }, [view, selectedId, familyTreeKey, people.length, refreshTree])
 
   const handleCreate = async (name: string) => {
     try {

@@ -4,16 +4,21 @@ import {
   Background,
   Controls,
   MiniMap,
-  Handle,
-  Position,
-  MarkerType,
+  ViewportPortal,
   useNodesState,
   useEdgesState,
-  type Node,
-  type Edge
+  type Node
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import type { TreeData, TreeNode, Person } from '@shared/types'
+import type { TreeData, Person } from '@shared/types'
+import {
+  layoutPedigreeTree,
+  buildFamilyConnectors,
+  familyConnectorPath,
+  standalonePartnerPairs,
+  partnerLineCoords,
+  PEDIGREE_NODE_W
+} from '@shared/tree-layout'
 import { personLabel, formatLifeSpan } from '../lib/labels'
 
 interface Props {
@@ -30,12 +35,6 @@ function PersonNode({ data }: { data: { person: Person; isFocus: boolean; onSele
       }`}
       onClick={() => data.onSelect(p.id)}
     >
-      <Handle type="target" position={Position.Top} id="top" />
-      <Handle type="source" position={Position.Bottom} id="bottom" />
-      <Handle type="source" position={Position.Left} id="left-s" />
-      <Handle type="target" position={Position.Left} id="left-t" />
-      <Handle type="source" position={Position.Right} id="right-s" />
-      <Handle type="target" position={Position.Right} id="right-t" />
       <div className="flex gap-2.5 items-start">
         {p.thumbUrl ? (
           <img src={p.thumbUrl} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
@@ -53,221 +52,99 @@ function PersonNode({ data }: { data: { person: Person; isFocus: boolean; onSele
 
 const nodeTypes = { person: PersonNode }
 
-const NODE_W = 230
-const COUPLE_GAP = 36
-const SIBLING_GAP = 72
-const GROUP_GAP = 96
-const ROW_H = 150
-
-function buildGraphMaps(data: TreeData) {
-  const partnerOf = new Map<string, string>()
-  const parentsOf = new Map<string, string[]>()
-  const siblingsOf = new Map<string, Set<string>>()
-
+function extractPartnerPairs(data: TreeData): Array<[string, string]> {
+  const pairs: Array<[string, string]> = []
   for (const e of data.edges) {
-    if (e.kind === 'partner') {
-      partnerOf.set(e.source, e.target)
-      partnerOf.set(e.target, e.source)
-    } else if (e.kind === 'parent') {
-      const list = parentsOf.get(e.target) ?? []
-      list.push(e.source)
-      parentsOf.set(e.target, list)
-    } else if (e.kind === 'sibling') {
-      if (!siblingsOf.has(e.source)) siblingsOf.set(e.source, new Set())
-      if (!siblingsOf.has(e.target)) siblingsOf.set(e.target, new Set())
-      siblingsOf.get(e.source)!.add(e.target)
-      siblingsOf.get(e.target)!.add(e.source)
-    }
+    if (e.kind === 'partner') pairs.push([e.source, e.target])
   }
-
-  return { partnerOf, parentsOf, siblingsOf }
+  return pairs
 }
 
-function clusterRow(
-  rowNodes: TreeNode[],
-  partnerOf: Map<string, string>,
-  siblingsOf: Map<string, Set<string>>
-): TreeNode[][] {
-  const idSet = new Set(rowNodes.map((n) => n.id))
-  const visited = new Set<string>()
-  const groups: TreeNode[][] = []
-
-  for (const n of rowNodes) {
-    if (visited.has(n.id)) continue
-    const group: TreeNode[] = []
-    const queue = [n.id]
-    visited.add(n.id)
-
-    while (queue.length > 0) {
-      const id = queue.shift()!
-      const node = rowNodes.find((x) => x.id === id)
-      if (!node) continue
-      group.push(node)
-
-      const partnerId = partnerOf.get(id)
-      if (partnerId && idSet.has(partnerId) && !visited.has(partnerId)) {
-        visited.add(partnerId)
-        queue.push(partnerId)
-      }
-
-      for (const sid of siblingsOf.get(id) ?? []) {
-        if (idSet.has(sid) && !visited.has(sid)) {
-          visited.add(sid)
-          queue.push(sid)
-        }
-      }
-    }
-
-    groups.push(group)
-  }
-
-  return groups
-}
-
-function orderGroup(group: TreeNode[], partnerOf: Map<string, string>): TreeNode[] {
-  const sorted = [...group].sort((a, b) => personLabel(a.person).localeCompare(personLabel(b.person), 'ru'))
-  const ordered: TreeNode[] = []
-  const used = new Set<string>()
-
-  for (const n of sorted) {
-    if (used.has(n.id)) continue
-    ordered.push(n)
-    used.add(n.id)
-    const partnerId = partnerOf.get(n.id)
-    const partner = group.find((x) => x.id === partnerId)
-    if (partner && !used.has(partner.id)) {
-      ordered.push(partner)
-      used.add(partner.id)
-    }
-  }
-
-  return ordered
-}
-
-function groupAnchorX(group: TreeNode[], parentsOf: Map<string, string[]>, positions: Map<string, { x: number; y: number }>): number | null {
-  const xs: number[] = []
-  for (const n of group) {
-    for (const pid of parentsOf.get(n.id) ?? []) {
-      const p = positions.get(pid)
-      if (p) xs.push(p.x)
-    }
-  }
-  if (xs.length === 0) return null
-  return xs.reduce((a, b) => a + b, 0) / xs.length
-}
-
-function placeOrderedGroup(
-  ordered: TreeNode[],
-  y: number,
-  anchorX: number | null,
-  partnerOf: Map<string, string>,
-  positions: Map<string, { x: number; y: number }>,
-  startX: number
-): number {
-  const rel: number[] = []
-  let x = 0
-  for (let i = 0; i < ordered.length; i++) {
-    if (i > 0) {
-      const prev = ordered[i - 1]
-      const gap = partnerOf.get(prev.id) === ordered[i].id ? COUPLE_GAP : SIBLING_GAP
-      x += NODE_W + gap
-    }
-    rel.push(x)
-  }
-
-  const center = (rel[0] + rel[rel.length - 1]) / 2
-  const offset = anchorX != null ? anchorX - center : startX - rel[0]
-
-  for (let i = 0; i < ordered.length; i++) {
-    positions.set(ordered[i].id, { x: rel[i] + offset, y })
-  }
-
-  const right = rel[rel.length - 1] + offset + NODE_W
-  return anchorX != null ? right : right + GROUP_GAP
-}
-
-function layoutPositions(data: TreeData): Map<string, { x: number; y: number }> {
-  const { partnerOf, parentsOf, siblingsOf } = buildGraphMaps(data)
-  const positions = new Map<string, { x: number; y: number }>()
-  const gens = [...new Set(data.nodes.map((n) => n.generation))].sort((a, b) => a - b)
-
-  for (const g of gens) {
-    const rowNodes = data.nodes.filter((n) => n.generation === g)
-    const groups = clusterRow(rowNodes, partnerOf, siblingsOf)
-    groups.sort((a, b) => {
-      const ax = groupAnchorX(a, parentsOf, positions)
-      const bx = groupAnchorX(b, parentsOf, positions)
-      if (ax != null && bx != null && ax !== bx) return ax - bx
-      if (ax != null) return -1
-      if (bx != null) return 1
-      return personLabel(a[0].person).localeCompare(personLabel(b[0].person), 'ru')
-    })
-
-    let cursor = 0
-    for (const group of groups) {
-      const ordered = orderGroup(group, partnerOf)
-      const anchor = groupAnchorX(group, parentsOf, positions)
-      cursor = placeOrderedGroup(ordered, g * ROW_H, anchor, partnerOf, positions, cursor)
-    }
-
-    const rowXs = rowNodes.map((n) => positions.get(n.id)?.x ?? 0)
-    if (rowXs.length > 0) {
-      const center = (Math.min(...rowXs) + Math.max(...rowXs)) / 2
-      for (const n of rowNodes) {
-        const p = positions.get(n.id)!
-        positions.set(n.id, { x: p.x - center, y: p.y })
-      }
-    }
-  }
-
-  return positions
+function RelationshipLayer({
+  connectors,
+  partnerLines
+}: {
+  connectors: ReturnType<typeof buildFamilyConnectors>
+  partnerLines: Array<{ id: string; x1: number; y1: number; x2: number; y2: number }>
+}) {
+  return (
+    <ViewportPortal>
+      <svg
+        width={1}
+        height={1}
+        style={{ position: 'absolute', overflow: 'visible', pointerEvents: 'none', zIndex: 0 }}
+      >
+        {connectors.map((connector) => (
+          <path
+            key={connector.familyId}
+            d={familyConnectorPath(connector)}
+            fill="none"
+            stroke="#57534e"
+            strokeWidth={2}
+            strokeLinecap="square"
+          />
+        ))}
+        {partnerLines.map((line) => (
+          <line
+            key={line.id}
+            x1={line.x1}
+            y1={line.y1}
+            x2={line.x2}
+            y2={line.y2}
+            stroke="#78716c"
+            strokeWidth={2}
+            strokeDasharray="6 4"
+            strokeLinecap="round"
+          />
+        ))}
+      </svg>
+    </ViewportPortal>
+  )
 }
 
 export function TreeView({ data, onSelectPerson }: Props) {
   const layout = useMemo(() => {
-    const positions = layoutPositions(data)
-    const nodes: Node[] = data.nodes.map((n) => ({
-      id: n.id,
-      type: 'person',
-      position: positions.get(n.id) ?? { x: 0, y: 0 },
-      data: { person: n.person, isFocus: n.id === data.focusPersonId, onSelect: onSelectPerson },
-      sourcePosition: Position.Bottom,
-      targetPosition: Position.Top
-    }))
+    const nodeIds = data.nodes.map((n) => n.id)
+    const partnerPairs = extractPartnerPairs(data)
+    const families = data.families ?? []
 
-    const edges: Edge[] = data.edges
-      .filter((e) => e.kind !== 'sibling')
-      .map((e) => {
-        const sourcePos = positions.get(e.source)
-        const targetPos = positions.get(e.target)
-        const sourceOnLeft = (sourcePos?.x ?? 0) <= (targetPos?.x ?? 0)
-        const isPartner = e.kind === 'partner'
-        return {
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          sourceHandle: isPartner ? (sourceOnLeft ? 'right-s' : 'left-s') : 'bottom',
-          targetHandle: isPartner ? (sourceOnLeft ? 'left-t' : 'right-t') : 'top',
-          type: isPartner ? 'straight' : 'smoothstep',
-          style: isPartner
-            ? { stroke: '#78716c', strokeWidth: 2.5, strokeDasharray: '7 5' }
-            : { stroke: '#44403c', strokeWidth: 2.5 },
-          markerEnd: isPartner
-            ? undefined
-            : { type: MarkerType.ArrowClosed, color: '#44403c', width: 16, height: 16 }
-        }
-      })
+    const positions = layoutPedigreeTree({
+      nodeIds,
+      focusId: data.focusPersonId,
+      families,
+      partnerPairs
+    })
 
-    return { nodes, edges }
+    const connectors = buildFamilyConnectors(families, positions)
+
+    const partnerLines = standalonePartnerPairs(partnerPairs, families).flatMap(([a, b]) => {
+      const pa = positions.get(a)
+      const pb = positions.get(b)
+      if (!pa || !pb) return []
+      return [{ id: `${a}|${b}`, ...partnerLineCoords(pa, pb) }]
+    })
+
+    const nodes: Node[] = data.nodes.map((n) => {
+      const pos = positions.get(n.id) ?? { x: 0, y: 0 }
+      return {
+        id: n.id,
+        type: 'person',
+        position: { x: pos.x - PEDIGREE_NODE_W / 2, y: pos.y },
+        data: { person: n.person, isFocus: n.id === data.focusPersonId, onSelect: onSelectPerson },
+        draggable: false,
+        style: { zIndex: 2 }
+      }
+    })
+
+    return { nodes, connectors, partnerLines }
   }, [data, onSelectPerson])
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layout.nodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(layout.edges)
+  const [edges, , onEdgesChange] = useEdgesState([])
 
   useEffect(() => {
     setNodes(layout.nodes)
-    setEdges(layout.edges)
-  }, [layout, setNodes, setEdges])
+  }, [layout, setNodes])
 
   return (
     <div className="h-full w-full bg-stone-50 rounded-lg border border-stone-200">
@@ -279,13 +156,13 @@ export function TreeView({ data, onSelectPerson }: Props) {
         onNodeClick={(_, node) => onSelectPerson(node.id)}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.25 }}
-        minZoom={0.2}
+        fitViewOptions={{ padding: 0.35 }}
+        minZoom={0.12}
         nodesDraggable={false}
         nodesConnectable={false}
-        defaultEdgeOptions={{ interactionWidth: 24 }}
       >
-        <Background />
+        <RelationshipLayer connectors={layout.connectors} partnerLines={layout.partnerLines} />
+        <Background gap={20} size={1} />
         <Controls />
         <MiniMap />
       </ReactFlow>

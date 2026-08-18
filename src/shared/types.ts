@@ -247,9 +247,16 @@ export interface TreeEdge {
   kind: 'parent' | 'partner' | 'sibling'
 }
 
+export interface TreeFamily {
+  id: string
+  partners: string[]
+  children: string[]
+}
+
 export interface TreeData {
   nodes: TreeNode[]
   edges: TreeEdge[]
+  families: TreeFamily[]
   focusPersonId: string
 }
 
