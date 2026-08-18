@@ -2,7 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { assignGenerationsFromFocus, buildProjectGraph } from './tree-graph'
 
 describe('buildProjectGraph', () => {
-  it('builds partner, parent, and sibling edges from families', () => {
+  it('builds sibling pairs for three children', () => {
+    const graph = buildProjectGraph(new Map([['f1', ['p1']]]), new Map([['f1', ['c1', 'c2', 'c3']]]))
+    expect(graph.siblingPairs).toEqual(
+      expect.arrayContaining([
+        ['c1', 'c2'],
+        ['c1', 'c3'],
+        ['c2', 'c3']
+      ])
+    )
+    expect(graph.siblingPairs).toHaveLength(3)
+  })
+
+  it('links child to each partner in a couple', () => {
     const partnersByFamily = new Map([
       ['f1', ['p1', 'p2']],
       ['f2', ['p3']]

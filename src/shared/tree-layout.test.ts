@@ -4,6 +4,7 @@ import {
   buildFamilyConnectors,
   familyConnectorPath,
   layoutPedigreeTree,
+  partnerLineCoords,
   standalonePartnerPairs,
   PEDIGREE_NODE_H,
   type TreeFamily
@@ -122,5 +123,25 @@ describe('layoutPedigreeTree', () => {
 
     expect(positions.get('gc1')!.y - positions.get('c1')!.y).toBe(PEDIGREE_NODE_H)
     expect(positions.get('c1')!.y - positions.get('p1')!.y).toBe(PEDIGREE_NODE_H)
+  })
+
+  it('lays out three siblings in birth order under one parent', () => {
+    const positions = layoutPedigreeTree({
+      nodeIds: ['p1', 'c1', 'c2', 'c3'],
+      families: [{ id: 'f1', partners: ['p1'], children: ['c1', 'c2', 'c3'] }],
+      partnerPairs: []
+    })
+
+    expect(positions.get('c1')!.x).toBeLessThan(positions.get('c2')!.x)
+    expect(positions.get('c2')!.x).toBeLessThan(positions.get('c3')!.x)
+    expect(positions.get('p1')!.y).toBeLessThan(positions.get('c2')!.y)
+  })
+
+  it('draws partner line coords between spouse cards', () => {
+    const left = { x: 0, y: 150 }
+    const right = { x: 300, y: 150 }
+    const line = partnerLineCoords(left, right)
+    expect(line.x1).toBeLessThan(line.x2)
+    expect(line.y1).toBe(line.y2)
   })
 })

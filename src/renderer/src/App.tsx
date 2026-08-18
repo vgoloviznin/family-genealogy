@@ -21,17 +21,15 @@ export default function App() {
   const [treeData, setTreeData] = useState<TreeData | null>(null)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settings, setSettings] = useState<AppSettings | null>(null)
-  const [packStatus, setPackStatus] = useState('')
-  const [error, setError] = useState('')
-  const [saveNotice, setSaveNotice] = useState('')
+  const [toast, setToast] = useState<{ message: string; variant: 'info' | 'error' } | null>(null)
   const dirtyRef = useRef(false)
   const flushSaveRef = useRef<() => Promise<boolean>>(async () => true)
-  const saveNoticeTimer = useRef<number | null>(null)
+  const toastTimer = useRef<number | null>(null)
 
-  const showSaveNotice = useCallback((message: string) => {
-    setSaveNotice(message)
-    if (saveNoticeTimer.current) window.clearTimeout(saveNoticeTimer.current)
-    saveNoticeTimer.current = window.setTimeout(() => setSaveNotice(''), 1800)
+  const showToast = useCallback((message: string, variant: 'info' | 'error' = 'info', duration = variant === 'error' ? 4000 : 1800) => {
+    setToast({ message, variant })
+    if (toastTimer.current) window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), duration)
   }, [])
 
   const flushThen = useCallback(async (next: () => void | Promise<void>) => {
@@ -78,7 +76,7 @@ export default function App() {
     void window.api.settings.get().then(setSettings)
 
     const unsubProgress = window.api.pack.onProgress((p) => {
-      setPackStatus(p.message)
+      showToast(p.message)
     })
     const unsubOpened = window.api.project.onOpened((meta) => {
       void loadProject(meta)
@@ -88,7 +86,7 @@ export default function App() {
       unsubProgress()
       unsubOpened()
     }
-  }, [loadProject])
+  }, [loadProject, showToast])
 
   useEffect(() => {
     if (project) {
@@ -124,21 +122,19 @@ export default function App() {
 
   const handleCreate = async (name: string) => {
     try {
-      setError('')
       const meta = await window.api.project.create(name)
       await loadProject(meta)
     } catch (e) {
-      if ((e as Error).message !== 'Cancelled') setError((e as Error).message)
+      if ((e as Error).message !== 'Cancelled') showToast((e as Error).message, 'error')
     }
   }
 
   const handleOpen = async () => {
     try {
-      setError('')
       const meta = await window.api.project.open()
       if (meta) await loadProject(meta)
     } catch (e) {
-      setError((e as Error).message)
+      showToast((e as Error).message, 'error')
     }
   }
 
@@ -147,18 +143,18 @@ export default function App() {
       const meta = await window.api.pack.import()
       if (meta) await loadProject(meta)
     } catch (e) {
-      setError((e as Error).message)
+      showToast((e as Error).message, 'error')
     }
   }
 
   const handleExport = async () => {
     const path = await window.api.pack.export()
-    if (path) setPackStatus(`Экспорт: ${path}`)
+    if (path) showToast(`Экспорт: ${path}`, 'info', 4000)
   }
 
   const handleBackup = async () => {
     const path = await window.api.pack.backup()
-    if (path) setPackStatus(`Бэкап: ${path}`)
+    if (path) showToast(`Бэкап: ${path}`, 'info', 4000)
   }
 
   const handleRestore = async () => {
@@ -216,7 +212,6 @@ export default function App() {
   if (!project) {
     return (
       <>
-        {error && <div className="fixed top-4 left-1/2 -translate-x-1/2 bg-red-100 text-red-800 px-4 py-2 rounded">{error}</div>}
         <WelcomeScreen
           recents={recents}
           onCreate={(n) => void handleCreate(n)}
@@ -225,14 +220,14 @@ export default function App() {
           onOpenRecent={async (path) => {
             if (!path) return
             try {
-              setError('')
               const meta = await window.api.project.openPath(path)
               await loadProject(meta)
             } catch (e) {
-              setError((e as Error).message)
+              showToast((e as Error).message, 'error')
             }
           }}
         />
+        <Toast toast={toast} />
       </>
     )
   }
@@ -269,10 +264,6 @@ export default function App() {
           {t('settings')}
         </button>
       </header>
-
-      <SaveToast message={saveNotice} />
-      {packStatus && <div className="text-xs text-center py-1 bg-stone-100 text-stone-600">{packStatus}</div>}
-      {error && <div className="text-xs text-center py-1 bg-red-50 text-red-700">{error}</div>}
 
       <div className="flex-1 flex gap-3 p-3 min-h-0">
         {view === 'list' ? (
@@ -345,7 +336,7 @@ export default function App() {
                   onFlushSave={(fn) => {
                     flushSaveRef.current = fn
                   }}
-                  onSaveNotice={showSaveNotice}
+                  onSaveNotice={showToast}
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-stone-500 bg-white rounded-lg border">
@@ -390,6 +381,8 @@ export default function App() {
           }}
         />
       )}
+
+      <Toast toast={toast} />
     </div>
   )
 }
@@ -467,13 +460,15 @@ function SettingsModal({
   )
 }
 
-function SaveToast({ message }: { message: string }) {
-  const [text, setText] = useState(message)
+function Toast({ toast }: { toast: { message: string; variant: 'info' | 'error' } | null }) {
+  const [text, setText] = useState(toast?.message ?? '')
+  const [variant, setVariant] = useState<'info' | 'error'>(toast?.variant ?? 'info')
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    if (message) {
-      setText(message)
+    if (toast?.message) {
+      setText(toast.message)
+      setVariant(toast.variant)
       setOpen(false)
       const frame = window.requestAnimationFrame(() => {
         window.requestAnimationFrame(() => setOpen(true))
@@ -483,18 +478,23 @@ function SaveToast({ message }: { message: string }) {
     setOpen(false)
     const hide = window.setTimeout(() => setText(''), 320)
     return () => window.clearTimeout(hide)
-  }, [message])
+  }, [toast])
 
   if (!text) return null
 
+  const isError = variant === 'error'
+
   return (
-    <div className="fixed bottom-4 left-4 z-50 pointer-events-none">
+    <div className="fixed bottom-4 left-4 z-50 pointer-events-none max-w-[min(32rem,calc(100vw-2rem))]">
       <div
-        className={`text-xs text-stone-600 bg-white/90 border border-stone-200 shadow-sm rounded-md px-3 py-1.5 transition-opacity duration-300 ease-out ${
-          open ? 'opacity-100' : 'opacity-0'
-        }`}
+        className={`text-xs shadow-sm rounded-md px-3 py-2 transition-opacity duration-300 ease-out border ${
+          isError
+            ? 'text-red-800 bg-red-50/95 border-red-200'
+            : 'text-stone-600 bg-white/95 border-stone-200'
+        } ${open ? 'opacity-100' : 'opacity-0'}`}
+        title={text}
       >
-        {text}
+        <div className="break-all leading-snug">{text}</div>
       </div>
     </div>
   )

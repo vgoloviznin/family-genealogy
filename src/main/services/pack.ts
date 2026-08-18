@@ -1,5 +1,5 @@
 import { createHash } from 'crypto'
-import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'fs'
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'fs'
 import { join, dirname } from 'path'
 import { dialog, BrowserWindow, app } from 'electron'
 import archiver from 'archiver'
@@ -8,9 +8,10 @@ import { checkpointDatabase, closeDatabase } from '../db/connection'
 import { getProjectJson, openProjectAtPath, requireProject, closeProject } from './project'
 import { getSettings } from './settings'
 import { SCHEMA_VERSION } from '../db/schema'
+import { FGTREE_FORMAT, readPackManifest, verifyPackDatabaseHash } from '@shared/pack-manifest'
 import type { PackProgress, ProjectMeta } from '@shared/types'
 
-const FORMAT = 'fgtree'
+const FORMAT = FGTREE_FORMAT
 const FORMAT_VERSION = 1
 
 let progressCallback: ((p: PackProgress) => void) | null = null
@@ -65,7 +66,7 @@ async function buildManifest(projectPath: string, kind: 'export' | 'backup'): Pr
   }
 }
 
-async function packProject(projectPath: string, outputPath: string, kind: 'export' | 'backup'): Promise<string> {
+export async function packProjectArchive(projectPath: string, outputPath: string, kind: 'export' | 'backup'): Promise<string> {
   checkpointDatabase()
   const manifest = await buildManifest(projectPath, kind)
   mkdirSync(dirname(outputPath), { recursive: true })
@@ -99,7 +100,7 @@ async function packProject(projectPath: string, outputPath: string, kind: 'expor
   return outputPath
 }
 
-async function unpackProject(archivePath: string, destPath: string): Promise<ProjectMeta> {
+export async function unpackProjectArchive(archivePath: string, destPath: string): Promise<ProjectMeta> {
   const entries = existsSync(destPath) ? readdirSync(destPath).filter((e) => !e.startsWith('.')) : []
   if (entries.length > 0) {
     throw new Error('Папка назначения не пуста')
@@ -111,14 +112,10 @@ async function unpackProject(archivePath: string, destPath: string): Promise<Pro
 
   const manifestPath = join(destPath, 'manifest.json')
   if (!existsSync(manifestPath)) throw new Error('Неверный файл: нет manifest.json')
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'))
-  if (manifest.format !== FORMAT) throw new Error('Неверный формат архива')
+  const manifest = readPackManifest(manifestPath)
 
   const dbPath = join(destPath, 'family.sqlite')
-  const actualHash = await sha256File(dbPath)
-  if (manifest.sqliteSha256 && manifest.sqliteSha256 !== actualHash) {
-    throw new Error('Кontрольная сумма базы данных не совпадает')
-  }
+  await verifyPackDatabaseHash(manifest, dbPath, sha256File)
 
   closeProject()
   return openProjectAtPath(destPath)
@@ -145,7 +142,7 @@ export async function exportProject(): Promise<string | null> {
     filters: [{ name: 'Family Geneology', extensions: ['fgtree'] }]
   })
   if (result.canceled || !result.filePath) return null
-  return packProject(project.path, result.filePath, 'export')
+  return packProjectArchive(project.path, result.filePath, 'export')
 }
 
 export async function importProject(): Promise<ProjectMeta | null> {
@@ -162,7 +159,7 @@ export async function importProject(): Promise<ProjectMeta | null> {
   })
   if (folderResult.canceled || !folderResult.filePaths[0]) return null
 
-  return unpackProject(fileResult.filePaths[0], folderResult.filePaths[0])
+  return unpackProjectArchive(fileResult.filePaths[0], folderResult.filePaths[0])
 }
 
 export async function backupProject(): Promise<string | null> {
@@ -173,7 +170,7 @@ export async function backupProject(): Promise<string | null> {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16)
   const safeName = project.name.replace(/[^a-zA-Z0-9_-]/g, '_')
   const outPath = join(backupFolder, `${safeName}_${stamp}.fgtree`)
-  const result = await packProject(project.path, outPath, 'backup')
+  const result = await packProjectArchive(project.path, outPath, 'backup')
   rotateBackups(backupFolder, safeName, settings.backupKeepCount)
   return result
 }
@@ -192,7 +189,7 @@ export async function restoreProject(): Promise<ProjectMeta | null> {
   })
   if (folderResult.canceled || !folderResult.filePaths[0]) return null
 
-  return unpackProject(fileResult.filePaths[0], folderResult.filePaths[0])
+  return unpackProjectArchive(fileResult.filePaths[0], folderResult.filePaths[0])
 }
 
 export async function backupOnQuitIfEnabled(): Promise<void> {
@@ -212,5 +209,5 @@ export async function handleOpenFgtreeFile(filePath: string): Promise<ProjectMet
     properties: ['openDirectory', 'createDirectory']
   })
   if (folderResult.canceled || !folderResult.filePaths[0]) return null
-  return unpackProject(filePath, folderResult.filePaths[0])
+  return unpackProjectArchive(filePath, folderResult.filePaths[0])
 }

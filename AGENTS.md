@@ -56,7 +56,21 @@ npm run build:win    # NSIS для Windows
 
 ## Тестирование
 
-Unit-тесты на **vitest** для чистых функций (`dates`, `paths`, `labels`). Не тянуть Electron/SQLite в тесты без необходимости — мокать или тестировать утилиты отдельно.
+**Любые изменения логики — только через прогон тестов.** Перед завершением задачи выполняй:
+
+```bash
+npm run test
+```
+
+**Новый функционал сразу покрывается тестами.** Если добавляешь поведение в `@shared`, `main/services` или чистые утилиты — добавь или обнови соответствующий `*.test.ts` в том же PR/коммите.
+
+Unit-тесты на **vitest** (`src/**/*.test.ts`):
+
+- **shared** — дерево, даты, recents, manifest `.fgtree`, IPC-обёртки
+- **main/services** — семьи, проект, архив (SQLite во временной папке, без UI Electron)
+- **utils / renderer/lib** — даты, пути, подписи
+
+Electron-диалоги и окна мокаются в `src/main/test/vitest.setup.ts`. Для service-тестов с SQLite может понадобиться `npm rebuild better-sqlite3`, если native-модуль собран под другую версию Node (Electron vs системный Node для vitest).
 
 ## Безопасность
 
