@@ -4,3 +4,16 @@ release
 dist
 *.log
 .DS_Store
+
+# Accidental tsc emit (electron-vite builds to out/)
+src/**/*.js
+src/**/*.d.ts
+!src/main/env.d.ts
+!src/renderer/src/env.d.ts
+tests/**/*.js
+tests/**/*.d.ts
+electron.vite.config.js
+electron.vite.config.d.ts
+vitest.config.js
+vitest.config.d.ts
+*.tsbuildinfo
