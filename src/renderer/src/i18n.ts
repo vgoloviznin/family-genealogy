@@ -1,5 +1,5 @@
-import i18n from 'i18next'
-import { initReactI18next } from 'react-i18next'
+import i18n from 'i18next';
+import { initReactI18next } from 'react-i18next';
 
 const resources = {
   ru: {
@@ -42,6 +42,7 @@ const resources = {
       addAssociation: 'Добавить связь',
       addMedia: 'Добавить файл',
       export: 'Экспорт',
+      syncFromArchive: 'Синхронизировать…',
       backup: 'Бэкап',
       restore: 'Восстановить',
       backupFolder: 'Папка бэкапов',
@@ -54,16 +55,44 @@ const resources = {
       role: 'Роль',
       delete: 'Удалить',
       noProject: 'Откройте или создайте проект',
-      sources: 'Источники'
+      sources: 'Источники',
+      mergeReportTitle: 'Синхронизация завершена',
+      mergeAdded: 'Добавлено записей',
+      mergeUpdated: 'Обновлено из архива',
+      mergeConflictsResolved: 'Конфликтов разрешено',
+      mergeMediaCopied: 'Скопировано медиа',
+      mergeBackup: 'Резервная копия',
+      mergeClose: 'Закрыть',
+      mergeConflictsTitle: 'Конфликты синхронизации',
+      mergeConflictsHint: 'Выберите версию для каждой записи. По умолчанию — ваша.',
+      mergeMyVersion: 'Моя',
+      mergeTheirVersion: 'Из архива',
+      mergeApplySync: 'Применить',
+      mergeField: 'Поле',
+      mergeNoFieldDiffs: 'Нет различий в полях',
+      syncBatchFromArchives: 'Синхронизировать несколько…',
+      mergeBatchReportTitle: 'Пакетная синхронизация завершена',
+      mergeBatchArchives: 'Архивов обработано',
+      syncHelpLink: 'Как синхронизироваться?',
+      syncHelpTitle: 'Как синхронизироваться',
+      syncHelpEditorReminder: 'Заполните «Подпись редактора» в настройках — она попадает в архив и помогает различать версии.',
+      syncHelpStep1: 'Получите последний master .fgtree от того, кто собирает дерево.',
+      syncHelpStep2: 'Перед правками желательно синхронизироваться («Синхронизировать из архива…»).',
+      syncHelpStep3: 'После правок — Экспорт; имя файла выбираете сами.',
+      syncHelpStep4:
+        'Несколько архивов за раз — «Синхронизировать несколько архивов…»; при конфликтах проверьте версии (по умолчанию сохраняется «Моя»).',
+      syncHelpStep5: 'После сборки — обычный экспорт и рассылка обновлённого файла.',
+      syncHelpStep6: 'Не заводите одного и того же человека параллельно на двух устройствах.',
+      syncHelpStep7: 'Желательно, чтобы часы на устройствах были верными (иначе редкие конфликты по времени).'
     }
   }
-}
+};
 
 void i18n.use(initReactI18next).init({
   resources,
   lng: 'ru',
   fallbackLng: 'ru',
   interpolation: { escapeValue: false }
-})
+});
 
-export default i18n
+export default i18n;

@@ -1,7 +1,7 @@
-import { contextBridge, ipcRenderer } from 'electron'
-import { assertFamilyApi, createFamilyApi } from '@shared/family-api'
-import { IPC_CHANNELS } from '@shared/types'
-import type { Api, PackProgress, ProjectMeta, MenuCommand, UndoAction } from '@shared/types'
+import { contextBridge, ipcRenderer } from 'electron';
+import { assertFamilyApi, createFamilyApi } from '@shared/family-api';
+import { IPC_CHANNELS } from '@shared/types';
+import type { Api, PackProgress, ProjectMeta, MenuCommand, UndoAction } from '@shared/types';
 
 const api: Api = {
   project: {
@@ -14,9 +14,9 @@ const api: Api = {
     setName: (name) => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_SET_NAME, name),
     checkCloudPath: (path) => ipcRenderer.invoke(IPC_CHANNELS.PROJECT_CHECK_CLOUD_PATH, path),
     onOpened: (callback) => {
-      const handler = (_: unknown, meta: ProjectMeta) => callback(meta)
-      ipcRenderer.on('project:opened', handler)
-      return () => ipcRenderer.removeListener('project:opened', handler)
+      const handler = (_: unknown, meta: ProjectMeta) => callback(meta);
+      ipcRenderer.on('project:opened', handler);
+      return () => ipcRenderer.removeListener('project:opened', handler);
     }
   },
   people: {
@@ -60,17 +60,21 @@ const api: Api = {
     delete: (id) => ipcRenderer.invoke(IPC_CHANNELS.CITATIONS_DELETE, id)
   },
   tree: {
-    get: (personId, generations) => ipcRenderer.invoke(IPC_CHANNELS.TREE_GET, personId, generations)
+    get: (personId) => ipcRenderer.invoke(IPC_CHANNELS.TREE_GET, personId)
   },
   pack: {
     export: () => ipcRenderer.invoke(IPC_CHANNELS.PACK_EXPORT),
     import: () => ipcRenderer.invoke(IPC_CHANNELS.PACK_IMPORT),
     backup: () => ipcRenderer.invoke(IPC_CHANNELS.PACK_BACKUP),
     restore: () => ipcRenderer.invoke(IPC_CHANNELS.PACK_RESTORE),
+    previewSyncFromArchive: () => ipcRenderer.invoke(IPC_CHANNELS.PACK_SYNC_PREVIEW),
+    applySyncFromArchive: (archivePath, resolutions) => ipcRenderer.invoke(IPC_CHANNELS.PACK_SYNC_APPLY, archivePath, resolutions),
+    previewSyncFromArchives: () => ipcRenderer.invoke(IPC_CHANNELS.PACK_SYNC_PREVIEW_BATCH),
+    applySyncFromArchives: (archivePaths, resolutions) => ipcRenderer.invoke(IPC_CHANNELS.PACK_SYNC_APPLY_BATCH, archivePaths, resolutions),
     onProgress: (callback) => {
-      const handler = (_: unknown, progress: PackProgress) => callback(progress)
-      ipcRenderer.on('pack:progress', handler)
-      return () => ipcRenderer.removeListener('pack:progress', handler)
+      const handler = (_: unknown, progress: PackProgress) => callback(progress);
+      ipcRenderer.on('pack:progress', handler);
+      return () => ipcRenderer.removeListener('pack:progress', handler);
     }
   },
   settings: {
@@ -85,14 +89,14 @@ const api: Api = {
   },
   menu: {
     onCommand: (callback) => {
-      const handler = (_: unknown, command: MenuCommand) => callback(command)
-      ipcRenderer.on('menu:command', handler)
-      return () => ipcRenderer.removeListener('menu:command', handler)
+      const handler = (_: unknown, command: MenuCommand) => callback(command);
+      ipcRenderer.on('menu:command', handler);
+      return () => ipcRenderer.removeListener('menu:command', handler);
     }
   }
-}
+};
 
-assertFamilyApi(api.family)
-contextBridge.exposeInMainWorld('api', api)
+assertFamilyApi(api.family);
+contextBridge.exposeInMainWorld('api', api);
 
-export type { Api }
+export type { Api };

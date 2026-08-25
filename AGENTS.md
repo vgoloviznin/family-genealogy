@@ -13,7 +13,7 @@ Desktop-приложение для ведения семейного архив
 - **Electron 37** + **electron-vite** + **React 19** + **TypeScript**
 - **SQLite** (`better-sqlite3`) + миграции в `src/main/db/connection.ts`
 - **Tailwind CSS 4**, **@xyflow/react** (дерево), **i18next** (RU)
-- Портable-архив **`.fgtree`** (ZIP64): экспорт, импорт, бэкап
+- Портable-архив **`.fgtree`** (ZIP64): экспорт, импорт, бэкап, **синхронизация (merge)**
 
 ## Структура
 
@@ -23,6 +23,7 @@ src/
   preload/    — contextBridge API (window.api)
   renderer/   — React UI
   shared/     — типы и IPC-каналы (@shared)
+tests/        — unit-тесты (зеркало src/ + helpers, setup)
 ```
 
 ## Соглашения
@@ -31,9 +32,31 @@ src/
 2. **IPC** — новые методы: тип в `src/shared/types.ts`, handler в `src/main/ipc/register.ts`, preload в `src/preload/index.ts`.
 3. **Схема БД** — правки в `schema.ts` + `CREATE TABLE IF NOT EXISTS` в `connection.ts`; при смене версии — `SCHEMA_VERSION` и обновление `project.json`.
 4. **Мягкое удаление** — `deletedAt` для people, events, associations, media, sources, citations.
-5. **Обмен данными** — только через `.fgtree`, не синхронизировать живой SQLite через облако.
+5. **Обмен данными** — только через `.fgtree`, не синхронизировать живой SQLite через облако (iCloud/Dropbox и т.п. для папки проекта — предупреждение в UI).
 6. **Язык UI** — русский (`src/renderer/src/i18n.ts`).
-7. **Не добавлять без запроса**: GEDCOM, полнотекстовый поиск, слияние дубликатов.
+7. **Не добавлять без запроса**: GEDCOM, полнотекстовый поиск, **автоматическое слияние дубликатов людей** (один человек — два UUID).
+
+## Синхронизация проектов (`.fgtree` merge)
+
+Несколько родственников правят **локальные копии** одного `projectId` и обмениваются архивами. Сервер не используется.
+
+| Действие | Поведение |
+|----------|-----------|
+| **Импорт** | Развёртывание в **пустую** папку (новая копия проекта). |
+| **Синхронизировать…** | Merge **в открытый** проект: preview → при tie-конфликтах UI (default «Моя») → apply. |
+| **Синхронизировать несколько…** | Batch merge архивов по `exportedAt`; один autobackup на apply. |
+
+**Правила merge** (ядро в `@shared/merge-rules`, `@shared/merge-places`; apply в `main/services/merge.ts`):
+
+- LWW по `updated_at`; conflict UI только при **равных** timestamps и разном содержимом.
+- Soft-delete (`deleted_at`) — побеждает более новая правка по `updated_at`.
+- **Places** — dedupe по `normalized_name`, remap `place_id` в событиях.
+- **Медиа** — dedupe по `content_hash`, файлы копируются при apply.
+- `app_meta` не merge; перед apply — autobackup `.fgtree`, после — `clearUndo()`.
+
+IPC: `pack:syncPreview`, `pack:syncApply`, `pack:syncPreviewBatch`, `pack:syncApplyBatch` — типы в `src/shared/types.ts`, handlers в `register.ts`, preload `window.api.pack.*`.
+
+Справка для пользователей: `SyncHelpDialog.tsx`.
 
 ## Команды
 
@@ -62,13 +85,15 @@ npm run build:win    # NSIS для Windows
 npm run test
 ```
 
-**Новый функционал сразу покрывается тестами.** Если добавляешь поведение в `@shared`, `main/services` или чистые утилиты — добавь или обнови соответствующий `*.test.ts` в том же PR/коммите.
+**Новый функционал сразу покрывается тестами.** Если добавляешь поведение в `@shared`, `main/services` или чистые утилиты — добавь или обнови соответствующий `*.test.ts` в `tests/` (зеркало структуры `src/`).
 
-Unit-тесты на **vitest** (`src/**/*.test.ts`):
+Unit-тесты на **vitest** (`tests/**/*.test.ts`):
 
-- **shared** — дерево, даты, recents, manifest `.fgtree`, IPC-обёртки
-- **main/services** — семьи, проект, архив (SQLite во временной папке, без UI Electron)
-- **utils / renderer/lib** — даты, пути, подписи
+- **tests/shared** — дерево, даты, recents, manifest `.fgtree`, merge-rules / merge-places / merge-conflict-fields
+- **tests/main** — семьи, проект, архив, merge / merge-batch / pack-sync (SQLite во временной папке)
+- **tests/renderer** — подписи и утилиты UI
+- **tests/helpers** — фикстуры проекта (`project-fixture.ts`), проверка SQLite
+- **tests/setup** — мок Electron (`vitest.setup.ts`)
 
 Electron-диалоги и окна мокаются в `src/main/test/vitest.setup.ts`. Для service-тестов с SQLite может понадобиться `npm rebuild better-sqlite3`, если native-модуль собран под другую версию Node (Electron vs системный Node для vitest).
 

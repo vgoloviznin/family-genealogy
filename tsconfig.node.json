@@ -9,15 +9,19 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "types": ["node"],
-    "baseUrl": ".",
     "paths": {
-      "@shared/*": ["src/shared/*"]
+      "@shared/*": ["./src/shared/*"],
+      "@main/*": ["./src/main/*"],
+      "@renderer/*": ["./src/renderer/src/*"]
     }
   },
   "include": [
     "electron.vite.config.ts",
+    "vitest.config.ts",
     "src/main/**/*",
     "src/preload/**/*",
-    "src/shared/**/*"
-  ]
+    "src/shared/**/*",
+    "tests/**/*.ts"
+  ],
+  "exclude": ["node_modules", "out", "release", "dist", "tests/renderer/**"]
 }

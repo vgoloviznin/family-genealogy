@@ -1,32 +1,34 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react';
 
 interface Props {
-  label?: string
-  value: string
-  onChange: (v: string) => void
+  label?: string;
+  value: string;
+  onChange: (v: string) => void;
 }
 
 export function PlaceField({ label, value, onChange }: Props) {
-  const [open, setOpen] = useState(false)
-  const [hints, setHints] = useState<Array<{ id: string; name: string }>>([])
-  const boxRef = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false);
+  const [hints, setHints] = useState<Array<{ id: string; name: string }>>([]);
+  const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const t = window.setTimeout(() => {
-      void window.api.places.search(value).then(setHints)
-    }, 200)
-    return () => window.clearTimeout(t)
-  }, [value])
+      void window.api.places.search(value).then(setHints);
+    }, 200);
+    return () => window.clearTimeout(t);
+  }, [value]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
-      if (!boxRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDoc)
-    return () => document.removeEventListener('mousedown', onDoc)
-  }, [])
+      if (!boxRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
 
-  const filtered = hints.filter((h) => h.name.toLowerCase() !== value.trim().toLowerCase())
+  const filtered = hints.filter((h) => h.name.toLowerCase() !== value.trim().toLowerCase());
 
   return (
     <div className="relative" ref={boxRef}>
@@ -36,8 +38,8 @@ export function PlaceField({ label, value, onChange }: Props) {
           className="w-full border border-stone-300 rounded-md px-2 py-1.5 mt-1 bg-stone-50"
           value={value}
           onChange={(e) => {
-            onChange(e.target.value)
-            setOpen(true)
+            onChange(e.target.value);
+            setOpen(true);
           }}
           onFocus={() => setOpen(true)}
           autoComplete="off"
@@ -51,8 +53,8 @@ export function PlaceField({ label, value, onChange }: Props) {
                 type="button"
                 className="w-full text-left px-2 py-1.5 hover:bg-stone-50"
                 onClick={() => {
-                  onChange(h.name)
-                  setOpen(false)
+                  onChange(h.name);
+                  setOpen(false);
                 }}
               >
                 {h.name}
@@ -62,5 +64,5 @@ export function PlaceField({ label, value, onChange }: Props) {
         </ul>
       )}
     </div>
-  )
+  );
 }

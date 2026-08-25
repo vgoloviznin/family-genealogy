@@ -1,14 +1,14 @@
 interface Props {
-  personId: string
-  thumbUrl?: string | null
-  size?: 'sm' | 'md'
-  onUpdated?: () => void | Promise<void>
+  personId: string;
+  thumbUrl?: string | null;
+  size?: 'sm' | 'md';
+  onUpdated?: () => void | Promise<void>;
 }
 
 const sizeClass = {
   sm: 'w-8 h-8 rounded',
   md: 'w-12 h-12 rounded-lg'
-} as const
+} as const;
 
 export function PersonAvatar({ personId, thumbUrl, size = 'md', onUpdated }: Props) {
   const pickPhoto = async () => {
@@ -17,9 +17,11 @@ export function PersonAvatar({ personId, thumbUrl, size = 'md', onUpdated }: Pro
       imagesOnly: true,
       setPrimary: true,
       multiple: false
-    })
-    if (items.length > 0) await onUpdated?.()
-  }
+    });
+    if (items.length > 0) {
+      await onUpdated?.();
+    }
+  };
 
   return (
     <button
@@ -38,5 +40,5 @@ export function PersonAvatar({ personId, thumbUrl, size = 'md', onUpdated }: Pro
         {thumbUrl ? 'Сменить' : 'Фото'}
       </span>
     </button>
-  )
+  );
 }

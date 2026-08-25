@@ -1,42 +1,61 @@
-import Database from 'better-sqlite3'
-import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'
-import { join } from 'path'
-import * as schema from './schema'
+import Database from 'better-sqlite3';
+import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import { join } from 'path';
+import * as schema from './schema';
 
-export type AppDatabase = BetterSQLite3Database<typeof schema>
+export type AppDatabase = BetterSQLite3Database<typeof schema>;
 
-let db: AppDatabase | null = null
-let sqlite: Database.Database | null = null
-let dbPath: string | null = null
+let db: AppDatabase | null = null;
+let sqlite: Database.Database | null = null;
+let dbPath: string | null = null;
 
 export function openDatabase(projectPath: string): AppDatabase {
-  closeDatabase()
-  dbPath = join(projectPath, 'family.sqlite')
-  sqlite = new Database(dbPath)
-  sqlite.pragma('journal_mode = WAL')
-  sqlite.pragma('busy_timeout = 5000')
-  sqlite.pragma('foreign_keys = ON')
-  db = drizzle(sqlite, { schema })
-  runMigrations(sqlite)
-  return db
+  closeDatabase();
+  dbPath = join(projectPath, 'family.sqlite');
+  sqlite = new Database(dbPath);
+  sqlite.pragma('journal_mode = WAL');
+  sqlite.pragma('busy_timeout = 5000');
+  sqlite.pragma('foreign_keys = ON');
+  db = drizzle(sqlite, { schema });
+  runMigrations(sqlite);
+  return db;
 }
 
 export function getDatabase(): AppDatabase {
-  if (!db) throw new Error('Database not open')
-  return db
+  if (!db) {
+    throw new Error('Database not open');
+  }
+  return db;
 }
 
 export function getDatabasePath(): string | null {
-  return dbPath
+  return dbPath;
+}
+
+export function getSqlite(): Database.Database {
+  if (!sqlite) {
+    throw new Error('Database not open');
+  }
+  return sqlite;
+}
+
+/** Open a DB file with migrations without touching the current project connection. */
+export function openStandaloneDatabase(dbFilePath: string): Database.Database {
+  const standalone = new Database(dbFilePath);
+  standalone.pragma('journal_mode = WAL');
+  standalone.pragma('busy_timeout = 5000');
+  standalone.pragma('foreign_keys = ON');
+  runMigrations(standalone);
+  return standalone;
 }
 
 export function closeDatabase(): void {
   if (sqlite) {
-    sqlite.close()
-    sqlite = null
+    sqlite.close();
+    sqlite = null;
   }
-  db = null
-  dbPath = null
+  db = null;
+  dbPath = null;
 }
 
 function runMigrations(sqlite: Database.Database): void {
@@ -214,27 +233,29 @@ function runMigrations(sqlite: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_media_links_event ON media_links(event_id);
     CREATE INDEX IF NOT EXISTS idx_citations_person ON citations(person_id);
     CREATE INDEX IF NOT EXISTS idx_citations_source ON citations(source_id);
-  `)
+  `);
 
-  ensureColumn(sqlite, 'events', 'latitude', 'REAL')
-  ensureColumn(sqlite, 'events', 'longitude', 'REAL')
+  ensureColumn(sqlite, 'events', 'latitude', 'REAL');
+  ensureColumn(sqlite, 'events', 'longitude', 'REAL');
 }
 
 function ensureColumn(sqlite: Database.Database, table: string, column: string, ddl: string): void {
-  const info = sqlite.pragma(`table_info(${table})`) as Array<{ name: string }>
+  const info = sqlite.pragma(`table_info(${table})`) as Array<{ name: string }>;
   if (!info.some((col) => col.name === column)) {
-    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`)
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
   }
 }
 
 export function checkpointDatabase(): void {
   if (sqlite) {
-    sqlite.pragma('wal_checkpoint(TRUNCATE)')
-    return
+    sqlite.pragma('wal_checkpoint(TRUNCATE)');
+    return;
   }
-  const path = dbPath
-  if (!path) return
-  const temp = new Database(path)
-  temp.pragma('wal_checkpoint(TRUNCATE)')
-  temp.close()
+  const path = dbPath;
+  if (!path) {
+    return;
+  }
+  const temp = new Database(path);
+  temp.pragma('wal_checkpoint(TRUNCATE)');
+  temp.close();
 }

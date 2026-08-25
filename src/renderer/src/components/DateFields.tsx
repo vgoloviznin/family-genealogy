@@ -1,10 +1,10 @@
-import type { PartialDate, DatePrecision } from '@shared/types'
-import { datePartsVisibility, trimPartialDateForPrecision } from '@shared/partial-date'
+import type { PartialDate, DatePrecision } from '@shared/types';
+import { datePartsVisibility, trimPartialDateForPrecision } from '@shared/partial-date';
 
 interface Props {
-  value: PartialDate
-  onChange: (v: PartialDate) => void
-  label?: string
+  value: PartialDate;
+  onChange: (v: PartialDate) => void;
+  label?: string;
 }
 
 const precisions: { value: DatePrecision; label: string }[] = [
@@ -15,12 +15,12 @@ const precisions: { value: DatePrecision; label: string }[] = [
   { value: 'circa', label: 'Около' },
   { value: 'before', label: 'До' },
   { value: 'after', label: 'После' }
-]
+];
 
 export function DateFields({ value, onChange, label }: Props) {
-  const parts = datePartsVisibility(value.precision)
-  const showNumeric = parts.day || parts.month || parts.year
-  const colCount = [parts.day, parts.month, parts.year].filter(Boolean).length
+  const parts = datePartsVisibility(value.precision);
+  const showNumeric = parts.day || parts.month || parts.year;
+  const colCount = [parts.day, parts.month, parts.year].filter(Boolean).length;
 
   return (
     <div className="space-y-2">
@@ -28,9 +28,7 @@ export function DateFields({ value, onChange, label }: Props) {
       <select
         className="w-full border border-stone-300 rounded px-2 py-1 text-sm"
         value={value.precision}
-        onChange={(e) =>
-          onChange(trimPartialDateForPrecision({ ...value, precision: e.target.value as DatePrecision }))
-        }
+        onChange={(e) => onChange(trimPartialDateForPrecision({ ...value, precision: e.target.value as DatePrecision }))}
       >
         {precisions.map((p) => (
           <option key={p.value} value={p.value}>
@@ -39,10 +37,7 @@ export function DateFields({ value, onChange, label }: Props) {
         ))}
       </select>
       {showNumeric && (
-        <div
-          className="grid gap-2"
-          style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}
-        >
+        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${colCount}, minmax(0, 1fr))` }}>
           {parts.day && (
             <input
               type="number"
@@ -79,5 +74,5 @@ export function DateFields({ value, onChange, label }: Props) {
         onChange={(e) => onChange({ ...value, originalText: e.target.value || null })}
       />
     </div>
-  )
+  );
 }

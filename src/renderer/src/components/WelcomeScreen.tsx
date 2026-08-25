@@ -1,20 +1,20 @@
-import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import type { RecentProject } from '@shared/types'
-import { normalizeRecentProjects } from '@shared/recents'
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { RecentProject } from '@shared/types';
+import { normalizeRecentProjects } from '@shared/recents';
 
 interface Props {
-  recents: RecentProject[]
-  onCreate: (name: string) => void
-  onOpen: () => void
-  onImport: () => void
-  onOpenRecent: (path: string) => void
+  recents: RecentProject[];
+  onCreate: (name: string) => void;
+  onOpen: () => void;
+  onImport: () => void;
+  onOpenRecent: (path: string) => void;
 }
 
 export function WelcomeScreen({ recents, onCreate, onOpen, onImport, onOpenRecent }: Props) {
-  const { t } = useTranslation()
-  const [name, setName] = useState('Моё семейное древо')
-  const items = normalizeRecentProjects(recents)
+  const { t } = useTranslation();
+  const [name, setName] = useState('Моё семейное древо');
+  const items = normalizeRecentProjects(recents);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#f4f1eb] to-[#e8e0d4] p-8">
@@ -46,17 +46,10 @@ export function WelcomeScreen({ recents, onCreate, onOpen, onImport, onOpenRecen
         )}
 
         <label className="block text-sm text-stone-600 mb-1">{t('projectName')}</label>
-        <input
-          className="w-full border border-stone-300 rounded-lg px-3 py-2 mb-4"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
+        <input className="w-full border border-stone-300 rounded-lg px-3 py-2 mb-4" value={name} onChange={(e) => setName(e.target.value)} />
 
         <div className="flex flex-col gap-2">
-          <button
-            className="bg-stone-800 text-white rounded-lg py-2.5 hover:bg-stone-700"
-            onClick={() => onCreate(name)}
-          >
+          <button className="bg-stone-800 text-white rounded-lg py-2.5 hover:bg-stone-700" onClick={() => onCreate(name)}>
             {t('createProject')}
           </button>
           <button className="border border-stone-300 rounded-lg py-2.5 hover:bg-stone-50" onClick={onOpen}>
@@ -68,5 +61,5 @@ export function WelcomeScreen({ recents, onCreate, onOpen, onImport, onOpenRecen
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo } from 'react';
 import {
   ReactFlow,
   Background,
@@ -9,9 +9,9 @@ import {
   useEdgesState,
   useReactFlow,
   type Node
-} from '@xyflow/react'
-import '@xyflow/react/dist/style.css'
-import type { TreeData, Person, TreeFamily, TreeNode } from '@shared/types'
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import type { TreeData, Person, TreeFamily, TreeNode } from '@shared/types';
 import {
   layoutPedigreeTree,
   buildFamilyConnectors,
@@ -23,70 +23,58 @@ import {
   TREE_LINE_STYLES,
   PEDIGREE_CARD_H,
   type TreeLineSegment
-} from '@shared/tree-layout'
-import { defaultTreeFocusId } from '@shared/tree-graph'
-import { personLabel, personInitials, formatLifeSpan } from '../lib/labels'
+} from '@shared/tree-layout';
+import { defaultTreeFocusId } from '@shared/tree-graph';
+import { personLabel, personInitials, formatLifeSpan } from '../lib/labels';
 
 interface Props {
-  data: TreeData
-  selectedId: string | null
-  onSelectPerson: (id: string | null) => void
+  data: TreeData;
+  selectedId: string | null;
+  onSelectPerson: (id: string | null) => void;
 }
 
 interface PersonNodeData {
-  person: Person
-  cardWidth: number
-  isFocus: boolean
-  isSelected: boolean
-  hint: string | null
-  onSelect: (id: string) => void
+  person: Person;
+  cardWidth: number;
+  isFocus: boolean;
+  isSelected: boolean;
+  hint: string | null;
+  onSelect: (id: string) => void;
 }
 
 function TreeAvatar({ person, size }: { person: Person; size: 'sm' | 'lg' }) {
-  const box = size === 'sm' ? 'w-8 h-8 rounded-md' : 'w-12 h-12 rounded-lg'
+  const box = size === 'sm' ? 'w-8 h-8 rounded-md' : 'w-12 h-12 rounded-lg';
   if (person.thumbUrl) {
-    return <img src={person.thumbUrl} alt="" className={`${box} object-cover shrink-0`} />
+    return <img src={person.thumbUrl} alt="" className={`${box} object-cover shrink-0`} />;
   }
   return (
-    <div
-      className={`${box} shrink-0 bg-stone-200 text-stone-600 flex items-center justify-center text-[11px] font-medium leading-none`}
-      aria-hidden
-    >
+    <div className={`${box} shrink-0 bg-stone-200 text-stone-600 flex items-center justify-center text-[11px] font-medium leading-none`} aria-hidden>
       {personInitials(person)}
     </div>
-  )
+  );
 }
 
 function CompactCard({ person, isFocus, isSelected }: { person: Person; isFocus: boolean; isSelected: boolean }) {
-  const { primary, secondary } = compactNameLines(person)
+  const { primary, secondary } = compactNameLines(person);
   return (
     <div
       className={`w-full h-full px-2 py-1.5 bg-white rounded-lg text-left flex gap-2 items-center transition-colors ${
-        isSelected
-          ? 'opacity-0 pointer-events-none'
-          : isFocus
-            ? 'border-2 border-stone-700'
-            : 'border border-stone-300 hover:border-stone-400'
+        isSelected ? 'opacity-0 pointer-events-none' : isFocus ? 'border-2 border-stone-700' : 'border border-stone-300 hover:border-stone-400'
       }`}
     >
       <TreeAvatar person={person} size="sm" />
       <div className="min-w-0 flex-1">
         <div className="text-[12px] font-medium leading-[1.15] text-stone-900 whitespace-nowrap">{primary}</div>
-        {secondary ? (
-          <div className="text-[11px] leading-[1.15] text-stone-800 whitespace-nowrap">{secondary}</div>
-        ) : null}
+        {secondary ? <div className="text-[11px] leading-[1.15] text-stone-800 whitespace-nowrap">{secondary}</div> : null}
         <div className="text-[10px] tabular-nums text-stone-500 leading-tight mt-0.5 whitespace-nowrap">{formatLifeSpan(person)}</div>
       </div>
     </div>
-  )
+  );
 }
 
 function ExpandedCard({ person, hint, cardWidth }: { person: Person; hint: string | null; cardWidth: number }) {
   return (
-    <div
-      className="px-2 py-1.5 bg-white rounded-lg border-2 border-stone-800 shadow-md text-left"
-      style={{ width: cardWidth }}
-    >
+    <div className="px-2 py-1.5 bg-white rounded-lg border-2 border-stone-800 shadow-md text-left" style={{ width: cardWidth }}>
       <div className="flex gap-2 items-start">
         <TreeAvatar person={person} size="sm" />
         <div className="min-w-0 flex-1">
@@ -96,16 +84,12 @@ function ExpandedCard({ person, hint, cardWidth }: { person: Person; hint: strin
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function PersonNode({ data }: { data: PersonNodeData }) {
   return (
-    <div
-      className="relative cursor-pointer"
-      style={{ width: data.cardWidth, height: PEDIGREE_CARD_H }}
-      onClick={() => data.onSelect(data.person.id)}
-    >
+    <div className="relative cursor-pointer" style={{ width: data.cardWidth, height: PEDIGREE_CARD_H }} onClick={() => data.onSelect(data.person.id)}>
       <CompactCard person={data.person} isFocus={data.isFocus} isSelected={data.isSelected} />
       {data.isSelected ? (
         <div className="absolute left-0 top-0 z-20 pointer-events-auto">
@@ -113,68 +97,80 @@ function PersonNode({ data }: { data: PersonNodeData }) {
         </div>
       ) : null}
     </div>
-  )
+  );
 }
 
-const nodeTypes = { person: PersonNode }
+const nodeTypes = { person: PersonNode };
 
 function extractPartnerPairs(data: TreeData): Array<[string, string]> {
-  const pairs: Array<[string, string]> = []
+  const pairs: Array<[string, string]> = [];
   for (const e of data.edges) {
-    if (e.kind === 'partner') pairs.push([e.source, e.target])
+    if (e.kind === 'partner') {
+      pairs.push([e.source, e.target]);
+    }
   }
-  return pairs
+  return pairs;
 }
 
 function childCount(personId: string, families: TreeFamily[]): number {
-  let count = 0
+  let count = 0;
   for (const family of families) {
-    if (family.partners.includes(personId)) count += family.children.length
+    if (family.partners.includes(personId)) {
+      count += family.children.length;
+    }
   }
-  return count
+  return count;
 }
 
 function relationHint(node: TreeNode, focusId: string | null, data: TreeData): string | null {
-  const children = childCount(node.id, data.families)
-  const childPart = children > 0 ? `${children} ${children === 1 ? 'ребёнок' : children < 5 ? 'ребёнка' : 'детей'}` : null
+  const children = childCount(node.id, data.families);
+  const childPart = children > 0 ? `${children} ${children === 1 ? 'ребёнок' : children < 5 ? 'ребёнка' : 'детей'}` : null;
 
-  if (!focusId) return childPart
-  if (node.id === focusId) return childPart
+  if (!focusId) {
+    return childPart;
+  }
+  if (node.id === focusId) {
+    return childPart;
+  }
 
   if (node.type === 'ancestor') {
-    const isParent = data.edges.some((e) => e.kind === 'parent' && e.source === node.id && e.target === focusId)
+    const isParent = data.edges.some((e) => e.kind === 'parent' && e.source === node.id && e.target === focusId);
     if (isParent) {
-      if (node.person.sex === 'female') return childPart ? `Мать · ${childPart}` : 'Мать'
-      if (node.person.sex === 'male') return childPart ? `Отец · ${childPart}` : 'Отец'
-      return childPart ? `Родитель · ${childPart}` : 'Родитель'
+      if (node.person.sex === 'female') {
+        return childPart ? `Мать · ${childPart}` : 'Мать';
+      }
+      if (node.person.sex === 'male') {
+        return childPart ? `Отец · ${childPart}` : 'Отец';
+      }
+      return childPart ? `Родитель · ${childPart}` : 'Родитель';
     }
-    return childPart ? `Предок · ${childPart}` : 'Предок'
+    return childPart ? `Предок · ${childPart}` : 'Предок';
   }
 
   if (node.type === 'descendant') {
-    const isChild = data.edges.some((e) => e.kind === 'parent' && e.source === focusId && e.target === node.id)
-    if (isChild) return childPart ? `Ребёнок · ${childPart}` : 'Ребёнок'
-    return childPart ? `Потомок · ${childPart}` : 'Потомок'
+    const isChild = data.edges.some((e) => e.kind === 'parent' && e.source === focusId && e.target === node.id);
+    if (isChild) {
+      return childPart ? `Ребёнок · ${childPart}` : 'Ребёнок';
+    }
+    return childPart ? `Потомок · ${childPart}` : 'Потомок';
   }
 
   const isPartner = data.edges.some(
     (e) => e.kind === 'partner' && ((e.source === focusId && e.target === node.id) || (e.target === focusId && e.source === node.id))
-  )
-  if (isPartner) return childPart ? `Супруг(а) · ${childPart}` : 'Супруг(а)'
+  );
+  if (isPartner) {
+    return childPart ? `Супруг(а) · ${childPart}` : 'Супруг(а)';
+  }
 
-  return childPart
+  return childPart;
 }
 
 function RelationshipLayer({ segments }: { segments: TreeLineSegment[] }) {
   return (
     <ViewportPortal>
-      <svg
-        width={1}
-        height={1}
-        style={{ position: 'absolute', overflow: 'visible', pointerEvents: 'none', zIndex: 0 }}
-      >
+      <svg width={1} height={1} style={{ position: 'absolute', overflow: 'visible', pointerEvents: 'none', zIndex: 0 }}>
         {segments.map((segment) => {
-          const style = TREE_LINE_STYLES[segment.kind]
+          const style = TREE_LINE_STYLES[segment.kind];
           return (
             <line
               key={segment.id}
@@ -187,44 +183,49 @@ function RelationshipLayer({ segments }: { segments: TreeLineSegment[] }) {
               strokeDasharray={style.strokeDasharray ?? 'none'}
               strokeLinecap={style.strokeLinecap}
             />
-          )
+          );
         })}
       </svg>
     </ViewportPortal>
-  )
+  );
 }
 
 function FocusViewport({ focusId }: { focusId: string | null }) {
-  const { setCenter, getNode, fitView } = useReactFlow()
+  const { setCenter, getNode, fitView } = useReactFlow();
 
   useEffect(() => {
     if (!focusId) {
-      void fitView({ padding: 0.2, duration: 200 })
-      return
+      void fitView({ padding: 0.2, duration: 200 });
+      return;
     }
-    const node = getNode(focusId)
+    const node = getNode(focusId);
     if (!node) {
-      void fitView({ padding: 0.2, duration: 200 })
-      return
+      void fitView({ padding: 0.2, duration: 200 });
+      return;
     }
-    const width = typeof node.style?.width === 'number' ? node.style.width : Number(node.style?.width) || node.measured?.width || 148
-    const x = node.position.x + width / 2
-    const y = node.position.y + PEDIGREE_CARD_H / 2
-    void setCenter(x, y, { zoom: 1, duration: 200 })
-  }, [focusId, getNode, setCenter, fitView])
+    const width = typeof node.style?.width === 'number' ? node.style.width : Number(node.style?.width) || node.measured?.width || 148;
+    const x = node.position.x + width / 2;
+    const y = node.position.y + PEDIGREE_CARD_H / 2;
+    void setCenter(x, y, { zoom: 1, duration: 200 });
+  }, [focusId, getNode, setCenter, fitView]);
 
-  return null
+  return null;
 }
 
 function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
   const layout = useMemo(() => {
-    const nodeIds = data.nodes.map((n) => n.id)
-    const partnerPairs = extractPartnerPairs(data)
-    const families = data.families ?? []
-    const nodeWidths = buildPedigreeNodeWidths(data.nodes.map((n) => ({ id: n.id, ...n.person })))
+    const nodeIds = data.nodes.map((n) => n.id);
+    const partnerPairs = extractPartnerPairs(data);
+    const families = data.families ?? [];
+    const nodeWidths = buildPedigreeNodeWidths(data.nodes.map((n) => ({ id: n.id, ...n.person })));
 
     const layoutFocus =
-      data.focusPersonId ?? defaultTreeFocusId(nodeIds, families.flatMap((family) => family.children)) ?? undefined
+      data.focusPersonId ??
+      defaultTreeFocusId(
+        nodeIds,
+        families.flatMap((family) => family.children)
+      ) ??
+      undefined;
 
     const positions = layoutPedigreeTree({
       nodeIds,
@@ -232,29 +233,31 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
       families,
       partnerPairs,
       nodeWidths
-    })
+    });
 
-    const connectors = buildFamilyConnectors(families, positions, nodeWidths)
-    const lineSegments: TreeLineSegment[] = connectors.flatMap((connector) =>
-      familyConnectorSegments(connector, nodeWidths)
-    )
+    const connectors = buildFamilyConnectors(families, positions, nodeWidths);
+    const lineSegments: TreeLineSegment[] = connectors.flatMap((connector) => familyConnectorSegments(connector, nodeWidths));
 
     for (const [a, b] of standalonePartnerPairs(partnerPairs, families)) {
-      const pa = positions.get(a)
-      const pb = positions.get(b)
-      if (!pa || !pb || Math.abs(pa.y - pb.y) > 1) continue
-      const coords = partnerLineCoords(pa, pb, nodeWidths.get(a)!, nodeWidths.get(b)!)
-      if (coords.x2 - coords.x1 < 1) continue
+      const pa = positions.get(a);
+      const pb = positions.get(b);
+      if (!pa || !pb || Math.abs(pa.y - pb.y) > 1) {
+        continue;
+      }
+      const coords = partnerLineCoords(pa, pb, nodeWidths.get(a)!, nodeWidths.get(b)!);
+      if (coords.x2 - coords.x1 < 1) {
+        continue;
+      }
       lineSegments.push({
         id: `partner-${a}|${b}`,
         kind: 'partner',
         ...coords
-      })
+      });
     }
 
     const nodes: Node[] = data.nodes.map((n) => {
-      const pos = positions.get(n.id) ?? { x: 0, y: 0 }
-      const cardWidth = nodeWidths.get(n.id)!
+      const pos = positions.get(n.id) ?? { x: 0, y: 0 };
+      const cardWidth = nodeWidths.get(n.id)!;
       return {
         id: n.id,
         type: 'person',
@@ -269,26 +272,28 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
         },
         draggable: false,
         style: { width: cardWidth, zIndex: n.id === selectedId ? 30 : data.focusPersonId === n.id ? 10 : 2 }
-      }
-    })
+      };
+    });
 
-    return { nodes, lineSegments }
-  }, [data, selectedId, onSelectPerson])
+    return { nodes, lineSegments };
+  }, [data, selectedId, onSelectPerson]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(layout.nodes)
-  const [edges, , onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes, onNodesChange] = useNodesState(layout.nodes);
+  const [edges, , onEdgesChange] = useEdgesState([]);
 
   useEffect(() => {
-    setNodes(layout.nodes)
-  }, [layout, setNodes])
+    setNodes(layout.nodes);
+  }, [layout, setNodes]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && selectedId) onSelectPerson(null)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [selectedId, onSelectPerson])
+      if (e.key === 'Escape' && selectedId) {
+        onSelectPerson(null);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId, onSelectPerson]);
 
   return (
     <div className="h-full w-full bg-[#f4f1eb] rounded-lg border border-stone-200 tree-view">
@@ -299,7 +304,9 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
         onEdgesChange={onEdgesChange}
         onNodeClick={(_, node) => onSelectPerson(node.id)}
         onPaneClick={() => {
-          if (selectedId) onSelectPerson(null)
+          if (selectedId) {
+            onSelectPerson(null);
+          }
         }}
         nodeTypes={nodeTypes}
         minZoom={0.2}
@@ -314,7 +321,7 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
         <FocusViewport focusId={data.focusPersonId} />
       </ReactFlow>
     </div>
-  )
+  );
 }
 
 export function TreeView(props: Props) {
@@ -322,5 +329,5 @@ export function TreeView(props: Props) {
     <ReactFlowProvider>
       <TreeCanvas {...props} />
     </ReactFlowProvider>
-  )
+  );
 }

@@ -1,3 +1,7 @@
+import type { BatchMergeApplyResult, BatchMergePreviewResult, MergeApplyResult, MergeConflictResolution, MergePreviewResult } from './merge-types';
+
+export type { BatchMergeApplyResult, BatchMergePreviewResult, MergeApplyResult, MergeConflictResolution, MergePreviewResult } from './merge-types';
+
 export const IPC_CHANNELS = {
   PROJECT_CREATE: 'project:create',
   PROJECT_OPEN: 'project:open',
@@ -29,6 +33,7 @@ export const IPC_CHANNELS = {
   FAMILY_UNLINK_PARTNER: 'family:unlinkPartner',
   FAMILY_UNLINK_CHILD: 'family:unlinkChild',
   FAMILY_SET_UNION_TYPE: 'family:setUnionType',
+  FAMILY_DISSOLVE_UNION: 'family:dissolveUnion',
   FAMILY_SET_PEDIGREE: 'family:setPedigree',
 
   EVENTS_LIST_FOR_PERSON: 'events:listForPerson',
@@ -60,6 +65,10 @@ export const IPC_CHANNELS = {
   PACK_IMPORT: 'pack:import',
   PACK_BACKUP: 'pack:backup',
   PACK_RESTORE: 'pack:restore',
+  PACK_SYNC_PREVIEW: 'pack:syncPreview',
+  PACK_SYNC_APPLY: 'pack:syncApply',
+  PACK_SYNC_PREVIEW_BATCH: 'pack:syncPreviewBatch',
+  PACK_SYNC_APPLY_BATCH: 'pack:syncApplyBatch',
   PACK_PROGRESS: 'pack:progress',
 
   SETTINGS_GET: 'settings:get',
@@ -69,35 +78,19 @@ export const IPC_CHANNELS = {
   UNDO_PUSH: 'undo:push',
   UNDO_PERFORM: 'undo:perform',
   UNDO_CAN: 'undo:can'
-} as const
+} as const;
 
-export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS]
+export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
-export type MenuCommand =
-  | 'createProject'
-  | 'openProject'
-  | 'import'
-  | 'export'
-  | 'backup'
-  | 'restore'
-  | 'undo'
+export type MenuCommand = 'createProject' | 'openProject' | 'import' | 'export' | 'backup' | 'restore' | 'sync' | 'syncBatch' | 'syncHelp' | 'undo';
 
-export type Sex = 'male' | 'female' | 'other' | 'unknown'
-export type PedigreeType = 'birth' | 'adopted' | 'step' | 'foster'
-export type UnionType = 'marriage' | 'partnership'
-export type DatePrecision = 'exact' | 'year' | 'month' | 'circa' | 'before' | 'after' | 'unknown'
-export type SourceType = 'book' | 'archive' | 'document' | 'oral' | 'website' | 'photo' | 'other'
+export type Sex = 'male' | 'female' | 'other' | 'unknown';
+export type PedigreeType = 'birth' | 'adopted' | 'step' | 'foster';
+export type UnionType = 'marriage' | 'partnership' | 'unknown';
+export type DatePrecision = 'exact' | 'year' | 'month' | 'circa' | 'before' | 'after' | 'unknown';
+export type SourceType = 'book' | 'archive' | 'document' | 'oral' | 'website' | 'photo' | 'other';
 
-export type AssociationRole =
-  | 'godparent'
-  | 'witness'
-  | 'clergy'
-  | 'officiator'
-  | 'friend'
-  | 'neighbor'
-  | 'guardian'
-  | 'executor'
-  | 'other'
+export type AssociationRole = 'godparent' | 'witness' | 'clergy' | 'officiator' | 'friend' | 'neighbor' | 'guardian' | 'executor' | 'other';
 
 export type EventTypeCode =
   | 'birth'
@@ -119,231 +112,231 @@ export type EventTypeCode =
   | 'marriage'
   | 'divorce'
   | 'cohabitation'
-  | 'custom'
+  | 'custom';
 
 export interface PartialDate {
-  year?: number | null
-  month?: number | null
-  day?: number | null
-  hour?: number | null
-  minute?: number | null
-  precision: DatePrecision
-  originalText?: string | null
-  sortKey?: number | null
+  year?: number | null;
+  month?: number | null;
+  day?: number | null;
+  hour?: number | null;
+  minute?: number | null;
+  precision: DatePrecision;
+  originalText?: string | null;
+  sortKey?: number | null;
 }
 
 export interface ProjectMeta {
-  projectId: string
-  name: string
-  schemaVersion: number
-  createdAt: string
-  path: string
-  cloudWarning?: boolean
+  projectId: string;
+  name: string;
+  schemaVersion: number;
+  createdAt: string;
+  path: string;
+  cloudWarning?: boolean;
 }
 
 export interface Person {
-  id: string
-  firstName: string
-  lastName: string
-  middleName?: string | null
-  maidenName?: string | null
-  sex: Sex
-  isLiving: boolean
-  notes?: string | null
-  primaryPhotoId?: string | null
-  thumbUrl?: string | null
-  birthYear?: number | null
-  deathYear?: number | null
-  createdAt: string
-  updatedAt: string
-  deletedAt?: string | null
+  id: string;
+  firstName: string;
+  lastName: string;
+  middleName?: string | null;
+  maidenName?: string | null;
+  sex: Sex;
+  isLiving: boolean;
+  notes?: string | null;
+  primaryPhotoId?: string | null;
+  thumbUrl?: string | null;
+  birthYear?: number | null;
+  deathYear?: number | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
 }
 
 export interface PersonDetail extends Person {
-  birthEvent?: LifeEvent | null
-  deathEvent?: LifeEvent | null
-  burialEvent?: LifeEvent | null
-  families: FamilySummary[]
-  associations: AssociationView[]
-  events: LifeEvent[]
-  media: MediaItem[]
-  citations: CitationView[]
+  birthEvent?: LifeEvent | null;
+  deathEvent?: LifeEvent | null;
+  burialEvent?: LifeEvent | null;
+  families: FamilySummary[];
+  associations: AssociationView[];
+  events: LifeEvent[];
+  media: MediaItem[];
+  citations: CitationView[];
 }
 
 export interface LifeEvent {
-  id: string
-  type: EventTypeCode
-  customLabel?: string | null
-  personId?: string | null
-  familyId?: string | null
-  placeId?: string | null
-  placeName?: string | null
-  description?: string | null
-  latitude?: number | null
-  longitude?: number | null
-  date: PartialDate
-  createdAt: string
-  updatedAt: string
+  id: string;
+  type: EventTypeCode;
+  customLabel?: string | null;
+  personId?: string | null;
+  familyId?: string | null;
+  placeId?: string | null;
+  placeName?: string | null;
+  description?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  date: PartialDate;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface FamilySummary {
-  id: string
-  unionType: UnionType
-  partners: Person[]
-  children: Array<{ person: Person; pedigree: PedigreeType }>
+  id: string;
+  unionType: UnionType;
+  partners: Person[];
+  children: Array<{ person: Person; pedigree: PedigreeType }>;
 }
 
 export interface AssociationView {
-  id: string
-  role: AssociationRole
-  customRole?: string | null
-  fromPersonId: string
-  toPersonId: string
-  toPerson: Person
-  eventId?: string | null
-  notes?: string | null
+  id: string;
+  role: AssociationRole;
+  customRole?: string | null;
+  fromPersonId: string;
+  toPersonId: string;
+  toPerson: Person;
+  eventId?: string | null;
+  notes?: string | null;
 }
 
 export interface MediaItem {
-  id: string
-  fileName: string
-  mimeType: string
-  caption?: string | null
-  description?: string | null
-  takenAt?: string | null
-  thumbUrl?: string
-  isPrimary?: boolean
+  id: string;
+  fileName: string;
+  mimeType: string;
+  caption?: string | null;
+  description?: string | null;
+  takenAt?: string | null;
+  thumbUrl?: string;
+  isPrimary?: boolean;
 }
 
 export interface Source {
-  id: string
-  title: string
-  type: SourceType
-  author?: string | null
-  details?: string | null
-  notes?: string | null
-  createdAt: string
-  updatedAt: string
+  id: string;
+  title: string;
+  type: SourceType;
+  author?: string | null;
+  details?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface CitationView {
-  id: string
-  sourceId: string
-  source: Source
-  personId?: string | null
-  eventId?: string | null
-  page?: string | null
-  excerpt?: string | null
-  notes?: string | null
+  id: string;
+  sourceId: string;
+  source: Source;
+  personId?: string | null;
+  eventId?: string | null;
+  page?: string | null;
+  excerpt?: string | null;
+  notes?: string | null;
 }
 
 export interface TreeNode {
-  id: string
-  person: Person
-  type: 'ancestor' | 'focus' | 'descendant'
-  generation: number
+  id: string;
+  person: Person;
+  type: 'ancestor' | 'focus' | 'descendant';
+  generation: number;
 }
 
 export interface TreeEdge {
-  id: string
-  source: string
-  target: string
-  kind: 'parent' | 'partner' | 'sibling'
+  id: string;
+  source: string;
+  target: string;
+  kind: 'parent' | 'partner' | 'sibling';
 }
 
 export interface TreeFamily {
-  id: string
-  partners: string[]
-  children: string[]
+  id: string;
+  partners: string[];
+  children: string[];
 }
 
 export interface TreeData {
-  nodes: TreeNode[]
-  edges: TreeEdge[]
-  families: TreeFamily[]
-  focusPersonId: string | null
+  nodes: TreeNode[];
+  edges: TreeEdge[];
+  families: TreeFamily[];
+  focusPersonId: string | null;
 }
 
 export interface RecentProject {
-  path: string
-  name: string
+  path: string;
+  name: string;
 }
 
 export interface AppSettings {
-  deviceId: string
-  editorLabel: string
-  backupFolder?: string
-  backupOnQuit: boolean
-  backupKeepCount: number
-  recentProjects: string[]
+  deviceId: string;
+  editorLabel: string;
+  backupFolder?: string;
+  backupOnQuit: boolean;
+  backupKeepCount: number;
+  recentProjects: string[];
 }
 
 export interface PackProgress {
-  phase: 'pack' | 'unpack'
-  current: number
-  total: number
-  message: string
+  phase: 'pack' | 'unpack' | 'merge';
+  current: number;
+  total: number;
+  message: string;
 }
 
 export interface CreatePersonInput {
-  firstName: string
-  lastName: string
-  middleName?: string
-  maidenName?: string
-  sex?: Sex
-  isLiving?: boolean
-  notes?: string
-  birth?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>>
-  death?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>>
-  burial?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>>
+  firstName: string;
+  lastName: string;
+  middleName?: string;
+  maidenName?: string;
+  sex?: Sex;
+  isLiving?: boolean;
+  notes?: string;
+  birth?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>>;
+  death?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>>;
+  burial?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>>;
 }
 
 export interface UpdatePersonInput extends Partial<Omit<CreatePersonInput, 'death' | 'burial'>> {
-  id: string
+  id: string;
   /** null — удалить событие смерти (например, при отметке «жив») */
-  death?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>> | null
+  death?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>> | null;
   /** null — удалить место захоронения */
-  burial?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>> | null
+  burial?: Partial<Omit<LifeEvent, 'id' | 'createdAt' | 'updatedAt'>> | null;
 }
 
 export interface UpsertEventInput {
-  id?: string
-  type: EventTypeCode
-  customLabel?: string
-  personId?: string
-  familyId?: string
-  placeName?: string
-  description?: string
-  latitude?: number | null
-  longitude?: number | null
-  date: PartialDate
+  id?: string;
+  type: EventTypeCode;
+  customLabel?: string;
+  personId?: string;
+  familyId?: string;
+  placeName?: string;
+  description?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  date: PartialDate;
 }
 
 export interface CreateAssociationInput {
-  fromPersonId: string
-  toPersonId: string
-  role: AssociationRole
-  customRole?: string
-  eventId?: string
-  notes?: string
+  fromPersonId: string;
+  toPersonId: string;
+  role: AssociationRole;
+  customRole?: string;
+  eventId?: string;
+  notes?: string;
 }
 
 export interface CreateSourceInput {
-  title: string
-  type?: SourceType
-  author?: string
-  details?: string
-  notes?: string
+  title: string;
+  type?: SourceType;
+  author?: string;
+  details?: string;
+  notes?: string;
 }
 
 export interface CreateCitationInput {
-  sourceId?: string
-  newSource?: CreateSourceInput
-  personId?: string
-  eventId?: string
-  page?: string
-  excerpt?: string
-  notes?: string
+  sourceId?: string;
+  newSource?: CreateSourceInput;
+  personId?: string;
+  eventId?: string;
+  page?: string;
+  excerpt?: string;
+  notes?: string;
 }
 
 export type UndoAction =
@@ -356,111 +349,110 @@ export type UndoAction =
   | { type: 'family-relink-partner'; familyId: string; personId: string }
   | { type: 'family-relink-child'; familyId: string; personId: string; pedigree: PedigreeType }
   | { type: 'citation-delete'; id: string }
-  | { type: 'citation-restore'; id: string }
+  | { type: 'citation-restore'; id: string };
 
 export interface Api {
   project: {
-    create: (name: string) => Promise<ProjectMeta>
-    open: () => Promise<ProjectMeta | null>
-    openPath: (path: string) => Promise<ProjectMeta>
-    close: () => Promise<void>
-    getCurrent: () => Promise<ProjectMeta | null>
-    getRecents: () => Promise<RecentProject[]>
-    setName: (name: string) => Promise<ProjectMeta>
-    checkCloudPath: (path: string) => Promise<boolean>
-    onOpened: (callback: (meta: ProjectMeta) => void) => () => void
-  }
+    create: (name: string) => Promise<ProjectMeta>;
+    open: () => Promise<ProjectMeta | null>;
+    openPath: (path: string) => Promise<ProjectMeta>;
+    close: () => Promise<void>;
+    getCurrent: () => Promise<ProjectMeta | null>;
+    getRecents: () => Promise<RecentProject[]>;
+    setName: (name: string) => Promise<ProjectMeta>;
+    checkCloudPath: (path: string) => Promise<boolean>;
+    onOpened: (callback: (meta: ProjectMeta) => void) => () => void;
+  };
   people: {
-    list: () => Promise<Person[]>
-    get: (id: string) => Promise<PersonDetail | null>
-    create: (input: CreatePersonInput) => Promise<PersonDetail>
-    update: (input: UpdatePersonInput) => Promise<PersonDetail>
-    delete: (id: string) => Promise<void>
-    search: (query: string) => Promise<Person[]>
-  }
+    list: () => Promise<Person[]>;
+    get: (id: string) => Promise<PersonDetail | null>;
+    create: (input: CreatePersonInput) => Promise<PersonDetail>;
+    update: (input: UpdatePersonInput) => Promise<PersonDetail>;
+    delete: (id: string) => Promise<void>;
+    search: (query: string) => Promise<Person[]>;
+  };
   family: {
-    addPartner: (personId: string, partnerInput: CreatePersonInput, unionType?: UnionType) => Promise<PersonDetail>
-    addChild: (personId: string, childInput: CreatePersonInput, pedigree?: PedigreeType) => Promise<PersonDetail>
-    addParents: (personId: string, parentInputs: [CreatePersonInput, CreatePersonInput?], pedigree?: PedigreeType) => Promise<PersonDetail>
-    addSibling: (personId: string, siblingInput: CreatePersonInput, pedigree?: PedigreeType) => Promise<PersonDetail>
-    getForPerson: (personId: string) => Promise<FamilySummary[]>
-    linkPartner: (personId: string, partnerId: string, unionType?: UnionType) => Promise<void>
-    linkChild: (personId: string, childId: string, pedigree?: PedigreeType) => Promise<void>
-    linkParent: (personId: string, parentId: string, pedigree?: PedigreeType) => Promise<void>
-    linkSibling: (personId: string, siblingId: string, pedigree?: PedigreeType) => Promise<void>
-    linkPartnerToFamily: (familyId: string, personId: string) => Promise<void>
-    linkChildToFamily: (familyId: string, childId: string, pedigree?: PedigreeType) => Promise<void>
-    unlinkPartner: (familyId: string, personId: string) => Promise<void>
-    unlinkChild: (familyId: string, personId: string) => Promise<void>
-    setUnionType: (familyId: string, unionType: UnionType) => Promise<void>
-    setPedigree: (familyId: string, childId: string, pedigree: PedigreeType) => Promise<void>
-  }
+    addPartner: (personId: string, partnerInput: CreatePersonInput, unionType?: UnionType) => Promise<PersonDetail>;
+    addChild: (personId: string, childInput: CreatePersonInput, pedigree?: PedigreeType) => Promise<PersonDetail>;
+    addParents: (personId: string, parentInputs: [CreatePersonInput, CreatePersonInput?], pedigree?: PedigreeType) => Promise<PersonDetail>;
+    addSibling: (personId: string, siblingInput: CreatePersonInput, pedigree?: PedigreeType) => Promise<PersonDetail>;
+    getForPerson: (personId: string) => Promise<FamilySummary[]>;
+    linkPartner: (personId: string, partnerId: string, unionType?: UnionType) => Promise<void>;
+    linkChild: (personId: string, childId: string, pedigree?: PedigreeType) => Promise<void>;
+    linkParent: (personId: string, parentId: string, pedigree?: PedigreeType) => Promise<void>;
+    linkSibling: (personId: string, siblingId: string, pedigree?: PedigreeType) => Promise<void>;
+    linkPartnerToFamily: (familyId: string, personId: string) => Promise<void>;
+    linkChildToFamily: (familyId: string, childId: string, pedigree?: PedigreeType) => Promise<void>;
+    unlinkPartner: (familyId: string, personId: string) => Promise<void>;
+    unlinkChild: (familyId: string, personId: string) => Promise<void>;
+    setUnionType: (familyId: string, unionType: UnionType) => Promise<void>;
+    dissolveUnion: (familyId: string, personId: string) => Promise<void>;
+    setPedigree: (familyId: string, childId: string, pedigree: PedigreeType) => Promise<void>;
+  };
   events: {
-    listForPerson: (personId: string) => Promise<LifeEvent[]>
-    upsert: (input: UpsertEventInput) => Promise<LifeEvent>
-    delete: (id: string) => Promise<void>
-  }
+    listForPerson: (personId: string) => Promise<LifeEvent[]>;
+    upsert: (input: UpsertEventInput) => Promise<LifeEvent>;
+    delete: (id: string) => Promise<void>;
+  };
   places: {
-    search: (query: string) => Promise<Array<{ id: string; name: string }>>
-  }
+    search: (query: string) => Promise<Array<{ id: string; name: string }>>;
+  };
   associations: {
-    list: (personId: string) => Promise<AssociationView[]>
-    create: (input: CreateAssociationInput) => Promise<AssociationView>
-    delete: (id: string) => Promise<void>
-  }
+    list: (personId: string) => Promise<AssociationView[]>;
+    create: (input: CreateAssociationInput) => Promise<AssociationView>;
+    delete: (id: string) => Promise<void>;
+  };
   media: {
-    add: (target: {
-      personId?: string
-      eventId?: string
-      imagesOnly?: boolean
-      setPrimary?: boolean
-      multiple?: boolean
-    }) => Promise<MediaItem[]>
-    list: (target: { personId?: string; eventId?: string }) => Promise<MediaItem[]>
-    delete: (id: string) => Promise<void>
-    setPrimary: (personId: string, mediaId: string) => Promise<void>
-    open: (id: string) => Promise<void>
-  }
+    add: (target: { personId?: string; eventId?: string; imagesOnly?: boolean; setPrimary?: boolean; multiple?: boolean }) => Promise<MediaItem[]>;
+    list: (target: { personId?: string; eventId?: string }) => Promise<MediaItem[]>;
+    delete: (id: string) => Promise<void>;
+    setPrimary: (personId: string, mediaId: string) => Promise<void>;
+    open: (id: string) => Promise<void>;
+  };
   sources: {
-    list: () => Promise<Source[]>
-    create: (input: CreateSourceInput) => Promise<Source>
-    update: (input: Partial<CreateSourceInput> & { id: string }) => Promise<Source>
-    delete: (id: string) => Promise<void>
-  }
+    list: () => Promise<Source[]>;
+    create: (input: CreateSourceInput) => Promise<Source>;
+    update: (input: Partial<CreateSourceInput> & { id: string }) => Promise<Source>;
+    delete: (id: string) => Promise<void>;
+  };
   citations: {
-    listForPerson: (personId: string) => Promise<CitationView[]>
-    create: (input: CreateCitationInput) => Promise<CitationView>
-    delete: (id: string) => Promise<void>
-  }
+    listForPerson: (personId: string) => Promise<CitationView[]>;
+    create: (input: CreateCitationInput) => Promise<CitationView>;
+    delete: (id: string) => Promise<void>;
+  };
   tree: {
-    get: (personId?: string | null, generations?: number) => Promise<TreeData>
-  }
+    get: (personId?: string | null) => Promise<TreeData>;
+  };
   pack: {
-    export: () => Promise<string | null>
-    import: () => Promise<ProjectMeta | null>
-    backup: () => Promise<string | null>
-    restore: () => Promise<ProjectMeta | null>
-    onProgress: (callback: (progress: PackProgress) => void) => () => void
-  }
+    export: () => Promise<string | null>;
+    import: () => Promise<ProjectMeta | null>;
+    backup: () => Promise<string | null>;
+    restore: () => Promise<ProjectMeta | null>;
+    previewSyncFromArchive: () => Promise<MergePreviewResult | null>;
+    applySyncFromArchive: (archivePath: string, resolutions: MergeConflictResolution[]) => Promise<MergeApplyResult>;
+    previewSyncFromArchives: () => Promise<BatchMergePreviewResult | null>;
+    applySyncFromArchives: (archivePaths: string[], resolutions: MergeConflictResolution[]) => Promise<BatchMergeApplyResult>;
+    onProgress: (callback: (progress: PackProgress) => void) => () => void;
+  };
   settings: {
-    get: () => Promise<AppSettings>
-    set: (partial: Partial<AppSettings>) => Promise<AppSettings>
-    pickFolder: () => Promise<string | null>
-  }
+    get: () => Promise<AppSettings>;
+    set: (partial: Partial<AppSettings>) => Promise<AppSettings>;
+    pickFolder: () => Promise<string | null>;
+  };
   undo: {
-    push: (action: UndoAction) => Promise<void>
-    perform: () => Promise<UndoAction | null>
-    canUndo: () => Promise<boolean>
-  }
+    push: (action: UndoAction) => Promise<void>;
+    perform: () => Promise<UndoAction | null>;
+    canUndo: () => Promise<boolean>;
+  };
   menu: {
-    onCommand: (callback: (command: MenuCommand) => void) => () => void
-  }
+    onCommand: (callback: (command: MenuCommand) => void) => () => void;
+  };
 }
 
 declare global {
   interface Window {
-    api: Api
+    api: Api;
   }
 }
 
-export {}
+export {};

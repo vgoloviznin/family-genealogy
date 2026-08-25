@@ -1,6 +1,6 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 3;
 
 export const people = sqliteTable('people', {
   id: text('id').primaryKey(),
@@ -18,7 +18,7 @@ export const people = sqliteTable('people', {
   createdByDeviceId: text('created_by_device_id'),
   updatedByDeviceId: text('updated_by_device_id'),
   updatedByLabel: text('updated_by_label')
-})
+});
 
 export const families = sqliteTable('families', {
   id: text('id').primaryKey(),
@@ -30,7 +30,7 @@ export const families = sqliteTable('families', {
   createdByDeviceId: text('created_by_device_id'),
   updatedByDeviceId: text('updated_by_device_id'),
   updatedByLabel: text('updated_by_label')
-})
+});
 
 export const familyPartners = sqliteTable('family_partners', {
   id: text('id').primaryKey(),
@@ -40,7 +40,7 @@ export const familyPartners = sqliteTable('family_partners', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   deletedAt: text('deleted_at')
-})
+});
 
 export const familyChildren = sqliteTable('family_children', {
   id: text('id').primaryKey(),
@@ -50,7 +50,7 @@ export const familyChildren = sqliteTable('family_children', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   deletedAt: text('deleted_at')
-})
+});
 
 export const places = sqliteTable('places', {
   id: text('id').primaryKey(),
@@ -59,7 +59,7 @@ export const places = sqliteTable('places', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   deletedAt: text('deleted_at')
-})
+});
 
 export const events = sqliteTable('events', {
   id: text('id').primaryKey(),
@@ -85,7 +85,7 @@ export const events = sqliteTable('events', {
   createdByDeviceId: text('created_by_device_id'),
   updatedByDeviceId: text('updated_by_device_id'),
   updatedByLabel: text('updated_by_label')
-})
+});
 
 export const associations = sqliteTable('associations', {
   id: text('id').primaryKey(),
@@ -101,7 +101,7 @@ export const associations = sqliteTable('associations', {
   createdByDeviceId: text('created_by_device_id'),
   updatedByDeviceId: text('updated_by_device_id'),
   updatedByLabel: text('updated_by_label')
-})
+});
 
 export const mediaAssets = sqliteTable('media_assets', {
   id: text('id').primaryKey(),
@@ -120,7 +120,7 @@ export const mediaAssets = sqliteTable('media_assets', {
   createdByDeviceId: text('created_by_device_id'),
   updatedByDeviceId: text('updated_by_device_id'),
   updatedByLabel: text('updated_by_label')
-})
+});
 
 export const mediaLinks = sqliteTable('media_links', {
   id: text('id').primaryKey(),
@@ -129,7 +129,7 @@ export const mediaLinks = sqliteTable('media_links', {
   eventId: text('event_id'),
   createdAt: text('created_at').notNull(),
   deletedAt: text('deleted_at')
-})
+});
 
 export const sources = sqliteTable('sources', {
   id: text('id').primaryKey(),
@@ -144,7 +144,7 @@ export const sources = sqliteTable('sources', {
   createdByDeviceId: text('created_by_device_id'),
   updatedByDeviceId: text('updated_by_device_id'),
   updatedByLabel: text('updated_by_label')
-})
+});
 
 export const citations = sqliteTable('citations', {
   id: text('id').primaryKey(),
@@ -160,9 +160,9 @@ export const citations = sqliteTable('citations', {
   createdByDeviceId: text('created_by_device_id'),
   updatedByDeviceId: text('updated_by_device_id'),
   updatedByLabel: text('updated_by_label')
-})
+});
 
 export const appMeta = sqliteTable('app_meta', {
   key: text('key').primaryKey(),
   value: text('value').notNull()
-})
+});

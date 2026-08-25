@@ -1,10 +1,10 @@
-import { mkdirSync } from 'fs'
-import { tmpdir } from 'os'
-import { join } from 'path'
-import { vi } from 'vitest'
+import { mkdirSync } from 'fs';
+import { tmpdir } from 'os';
+import { join } from 'path';
+import { vi } from 'vitest';
 
-const userDataDir = join(tmpdir(), 'fgtree-test-userdata')
-mkdirSync(userDataDir, { recursive: true })
+const userDataDir = join(tmpdir(), 'fgtree-test-userdata');
+mkdirSync(userDataDir, { recursive: true });
 
 vi.mock('electron', () => ({
   app: {
@@ -26,4 +26,4 @@ vi.mock('electron', () => ({
     openExternal: vi.fn(async () => undefined),
     openPath: vi.fn(async () => '')
   }
-}))
+}));

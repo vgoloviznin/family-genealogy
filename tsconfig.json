@@ -1,4 +1,14 @@
 {
+  "compilerOptions": {
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "paths": {
+      "@shared/*": ["./src/shared/*"],
+      "@main/*": ["./src/main/*"],
+      "@renderer/*": ["./src/renderer/src/*"]
+    }
+  },
   "files": [],
   "references": [
     { "path": "./tsconfig.node.json" },

@@ -1,31 +1,35 @@
-import { app, BrowserWindow, Menu, protocol, net, nativeImage, shell } from 'electron'
-import { join } from 'path'
-import { pathToFileURL } from 'url'
-import iconPng from '../../resources/icon.png?asset'
-import { registerIpcHandlers } from './ipc/register'
-import { resolveMediaPath } from './services/media'
-import { backupOnQuitIfEnabled, handleOpenFgtreeFile } from './services/pack'
-import { closeProject } from './services/project'
+import { app, BrowserWindow, Menu, protocol, net, nativeImage, shell } from 'electron';
+import { join } from 'path';
+import { pathToFileURL } from 'url';
+import iconPng from '../../resources/icon.png?asset';
+import { registerIpcHandlers } from './ipc/register';
+import { resolveMediaPath } from './services/media';
+import { backupOnQuitIfEnabled, handleOpenFgtreeFile } from './services/pack';
+import { closeProject } from './services/project';
 
-let mainWindow: BrowserWindow | null = null
-let cachedAppIcon: Electron.NativeImage | null = null
+let mainWindow: BrowserWindow | null = null;
+let cachedAppIcon: Electron.NativeImage | null = null;
 
 function getAppIcon(): Electron.NativeImage {
   if (!cachedAppIcon) {
-    cachedAppIcon = nativeImage.createFromPath(iconPng)
+    cachedAppIcon = nativeImage.createFromPath(iconPng);
     if (cachedAppIcon.isEmpty()) {
-      cachedAppIcon = nativeImage.createEmpty()
+      cachedAppIcon = nativeImage.createEmpty();
     }
   }
-  return cachedAppIcon
+  return cachedAppIcon;
 }
 
 function setDockIcon(): void {
-  if (process.platform !== 'darwin') return
-  const icon = getAppIcon()
-  if (icon.isEmpty()) return
+  if (process.platform !== 'darwin') {
+    return;
+  }
+  const icon = getAppIcon();
+  if (icon.isEmpty()) {
+    return;
+  }
   try {
-    app.dock?.setIcon(icon)
+    app.dock?.setIcon(icon);
   } catch {
     // Dev mode uses PNG; packaged .app icon comes from Info.plist.
   }
@@ -42,7 +46,7 @@ protocol.registerSchemesAsPrivileged([
       stream: true
     }
   }
-])
+]);
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -58,21 +62,21 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false
     }
-  })
+  });
 
-  mainWindow.on('ready-to-show', () => mainWindow?.show())
+  mainWindow.on('ready-to-show', () => mainWindow?.show());
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://') || url.startsWith('http://')) {
-      void shell.openExternal(url)
+      void shell.openExternal(url);
     }
-    return { action: 'deny' }
-  })
+    return { action: 'deny' };
+  });
 
   if (process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL)
+    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
 }
 
@@ -85,6 +89,8 @@ function buildMenu(): void {
         { label: 'Открыть проект', accelerator: 'CmdOrCtrl+O', click: () => mainWindow?.webContents.send('menu:command', 'openProject') },
         { type: 'separator' },
         { label: 'Импорт .fgtree', click: () => mainWindow?.webContents.send('menu:command', 'import') },
+        { label: 'Синхронизировать из архива…', click: () => mainWindow?.webContents.send('menu:command', 'sync') },
+        { label: 'Синхронизировать несколько архивов…', click: () => mainWindow?.webContents.send('menu:command', 'syncBatch') },
         { label: 'Экспорт .fgtree', click: () => mainWindow?.webContents.send('menu:command', 'export') },
         { label: 'Бэкап', click: () => mainWindow?.webContents.send('menu:command', 'backup') },
         { label: 'Восстановить', click: () => mainWindow?.webContents.send('menu:command', 'restore') },
@@ -105,81 +111,106 @@ function buildMenu(): void {
     {
       label: 'Вид',
       submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }]
+    },
+    {
+      label: 'Справка',
+      submenu: [
+        {
+          label: 'Как синхронизироваться…',
+          click: () => mainWindow?.webContents.send('menu:command', 'syncHelp')
+        }
+      ]
     }
-  ]
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-const gotLock = app.requestSingleInstanceLock()
+const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
-  app.quit()
+  app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
-    const fgtree = argv.find((a) => a.endsWith('.fgtree'))
+    const fgtree = argv.find((a) => a.endsWith('.fgtree'));
     if (fgtree && mainWindow) {
       handleOpenFgtreeFile(fgtree).then((meta) => {
-        if (meta) mainWindow?.webContents.send('project:opened', meta)
-      })
+        if (meta) {
+          mainWindow?.webContents.send('project:opened', meta);
+        }
+      });
     }
     if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
+      if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+      }
+      mainWindow.focus();
     }
-  })
+  });
 
   app.whenReady().then(() => {
-    setDockIcon()
+    setDockIcon();
 
     protocol.handle('family-media', (request) => {
-      const url = new URL(request.url)
-      const relative = decodeURIComponent(url.pathname.slice(1))
-      const filePath = resolveMediaPath(relative)
-      if (!filePath) return new Response(null, { status: 404 })
-      return net.fetch(pathToFileURL(filePath).toString())
-    })
+      const url = new URL(request.url);
+      const relative = decodeURIComponent(url.pathname.slice(1));
+      const filePath = resolveMediaPath(relative);
+      if (!filePath) {
+        return new Response(null, { status: 404 });
+      }
+      return net.fetch(pathToFileURL(filePath).toString());
+    });
 
-    registerIpcHandlers()
-    buildMenu()
-    createWindow()
+    registerIpcHandlers();
+    buildMenu();
+    createWindow();
 
-    const fgtreeArg = process.argv.find((a) => a.endsWith('.fgtree'))
+    const fgtreeArg = process.argv.find((a) => a.endsWith('.fgtree'));
     if (fgtreeArg) {
       handleOpenFgtreeFile(fgtreeArg).then((meta) => {
-        if (meta) mainWindow?.webContents.send('project:opened', meta)
-      })
+        if (meta) {
+          mainWindow?.webContents.send('project:opened', meta);
+        }
+      });
     }
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow()
-    })
-  })
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+      }
+    });
+  });
 
   app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') app.quit()
-  })
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
 
-let quitting = false
+  let quitting = false;
 
   app.on('before-quit', (e) => {
-    if (quitting) return
-    e.preventDefault()
-    quitting = true
+    if (quitting) {
+      return;
+    }
+    e.preventDefault();
+    quitting = true;
     void backupOnQuitIfEnabled()
       .catch(() => undefined)
       .finally(() => {
-        closeProject()
-        app.exit(0)
-      })
-  })
+        closeProject();
+        app.exit(0);
+      });
+  });
 
   app.on('open-file', (event, filePath) => {
-    event.preventDefault()
+    event.preventDefault();
     if (filePath.endsWith('.fgtree')) {
       handleOpenFgtreeFile(filePath).then((meta) => {
-        if (meta) mainWindow?.webContents.send('project:opened', meta)
-      })
+        if (meta) {
+          mainWindow?.webContents.send('project:opened', meta);
+        }
+      });
     }
-  })
+  });
 }
 
-export { mainWindow }
+export { mainWindow };
