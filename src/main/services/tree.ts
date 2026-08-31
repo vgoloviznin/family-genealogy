@@ -1,7 +1,7 @@
 import { and, isNull, inArray } from 'drizzle-orm';
 import { getDatabase } from '../db/connection';
 import * as schema from '../db/schema';
-import { mapPerson, attachThumbs, loadLifeYears } from './people';
+import { mapPerson, attachThumbs, loadLifeYears } from './person-mapper';
 import { buildProjectGraph, assignGenerationsFromFocus, defaultTreeFocusId } from '@shared/tree-graph';
 import type { TreeData, TreeEdge, TreeNode, TreeFamily } from '@shared/types';
 

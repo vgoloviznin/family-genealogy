@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, protocol, net, nativeImage, shell } from 'electron';
+import { app, BrowserWindow, Menu, protocol, net, nativeImage, shell, ipcMain } from 'electron';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
 import iconPng from '../../resources/icon.png?asset';
@@ -6,6 +6,7 @@ import { registerIpcHandlers } from './ipc/register';
 import { resolveMediaPath } from './services/media';
 import { backupOnQuitIfEnabled, handleOpenFgtreeFile } from './services/pack';
 import { closeProject } from './services/project';
+import { IPC_CHANNELS } from '@shared/types';
 
 let mainWindow: BrowserWindow | null = null;
 let cachedAppIcon: Electron.NativeImage | null = null;
@@ -186,19 +187,46 @@ if (!gotLock) {
   });
 
   let quitting = false;
+  let prepareQuitResolve: ((proceed: boolean) => void) | null = null;
+
+  ipcMain.on(IPC_CHANNELS.APP_PREPARE_QUIT_DONE, (_event, proceed: boolean) => {
+    prepareQuitResolve?.(proceed);
+    prepareQuitResolve = null;
+  });
+
+  function requestRendererPrepareQuit(): Promise<boolean> {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return Promise.resolve(true);
+    }
+    return new Promise((resolve) => {
+      prepareQuitResolve = resolve;
+      mainWindow!.webContents.send(IPC_CHANNELS.APP_PREPARE_QUIT);
+      setTimeout(() => {
+        if (prepareQuitResolve) {
+          prepareQuitResolve(true);
+          prepareQuitResolve = null;
+        }
+      }, 10000);
+    });
+  }
 
   app.on('before-quit', (e) => {
     if (quitting) {
       return;
     }
     e.preventDefault();
-    quitting = true;
-    void backupOnQuitIfEnabled()
-      .catch(() => undefined)
-      .finally(() => {
-        closeProject();
-        app.exit(0);
-      });
+    void requestRendererPrepareQuit().then((proceed) => {
+      if (!proceed) {
+        return;
+      }
+      quitting = true;
+      void backupOnQuitIfEnabled()
+        .catch(() => undefined)
+        .finally(() => {
+          closeProject();
+          app.exit(0);
+        });
+    });
   });
 
   app.on('open-file', (event, filePath) => {

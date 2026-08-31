@@ -9,6 +9,7 @@ import * as sources from '../services/sources';
 import * as tree from '../services/tree';
 import * as pack from '../services/pack';
 import * as settings from '../services/settings';
+import * as dialogs from '../services/dialogs';
 import * as undo from '../services/undo';
 import { isCloudSyncedPath } from '../utils/paths';
 
@@ -281,7 +282,7 @@ export function registerIpcHandlers(): void {
   );
   ipcMain.handle(
     IPC_CHANNELS.SETTINGS_PICK_FOLDER,
-    wrap(() => settings.pickFolder())
+    wrap(() => dialogs.pickFolder())
   );
 
   ipcMain.handle(
@@ -298,5 +299,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.UNDO_CAN,
     wrap(() => undo.canUndo())
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.DIALOG_CONFIRM,
+    wrap((options) => dialogs.showConfirm(options))
   );
 }

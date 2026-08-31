@@ -6,10 +6,10 @@
   "author": "",
   "license": "MIT",
   "scripts": {
-    "dev": "electron-vite dev",
+    "dev": "node scripts/electron-vite.mjs dev",
     "build": "electron-vite build",
-    "preview": "electron-vite preview",
-    "postinstall": "electron-builder install-app-deps",
+    "preview": "node scripts/electron-vite.mjs preview",
+    "postinstall": "electron-builder install-app-deps && node node_modules/electron/install.js",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
     "build:mac": "npm run build && electron-builder --mac --config",
     "build:win": "npm run build && electron-builder --win --config",
@@ -17,7 +17,8 @@
     "lint:fix": "npm run lint -- --fix",
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" \"*.ts\"",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "1.1.23",
@@ -53,6 +54,7 @@
     "@types/react-dom": "19.2.4",
     "@types/uuid": "10.0.0",
     "@types/yauzl": "3.4.0",
+    "@vitest/coverage-v8": "3.2.7",
     "@vitejs/plugin-react": "5.2.0",
     "drizzle-kit": "0.31.10",
     "electron": "44.0.0",

@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { assertFamilyApi, createFamilyApi } from '@shared/family-api';
 import { IPC_CHANNELS } from '@shared/types';
-import type { Api, PackProgress, ProjectMeta, MenuCommand, UndoAction } from '@shared/types';
+import type { Api, ConfirmDialogOptions, PackProgress, ProjectMeta, MenuCommand, UndoAction } from '@shared/types';
 
 const api: Api = {
   project: {
@@ -92,6 +92,20 @@ const api: Api = {
       const handler = (_: unknown, command: MenuCommand) => callback(command);
       ipcRenderer.on('menu:command', handler);
       return () => ipcRenderer.removeListener('menu:command', handler);
+    }
+  },
+  dialog: {
+    confirm: (options: ConfirmDialogOptions) => ipcRenderer.invoke(IPC_CHANNELS.DIALOG_CONFIRM, options)
+  },
+  app: {
+    onPrepareQuit: (handler) => {
+      const listener = () => {
+        void handler().then((proceed) => {
+          ipcRenderer.send(IPC_CHANNELS.APP_PREPARE_QUIT_DONE, proceed);
+        });
+      };
+      ipcRenderer.on(IPC_CHANNELS.APP_PREPARE_QUIT, listener);
+      return () => ipcRenderer.removeListener(IPC_CHANNELS.APP_PREPARE_QUIT, listener);
     }
   }
 };

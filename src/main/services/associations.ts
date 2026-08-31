@@ -3,7 +3,7 @@ import { getDatabase } from '../db/connection';
 import * as schema from '../db/schema';
 import { newId, nowIso } from '../utils/id';
 import { getDeviceMeta } from './settings';
-import { mapPerson } from './people';
+import { mapPerson } from './person-mapper';
 import type { AssociationView, CreateAssociationInput } from '@shared/types';
 
 export async function listAssociationsForPerson(personId: string): Promise<AssociationView[]> {

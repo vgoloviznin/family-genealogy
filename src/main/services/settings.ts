@@ -1,4 +1,4 @@
-import { app, dialog } from 'electron';
+import { app } from 'electron';
 import Store from 'electron-store';
 import { v7 as uuidv7 } from 'uuid';
 import type { AppSettings } from '@shared/types';
@@ -63,15 +63,4 @@ export function pruneRecentProjects(missingPaths: string[]): void {
 export function getDeviceMeta(): { deviceId: string; label: string } {
   const s = getSettings();
   return { deviceId: s.deviceId, label: s.editorLabel };
-}
-
-export async function pickFolder(): Promise<string | null> {
-  const result = await dialog.showOpenDialog({
-    title: 'Папка бэкапов',
-    properties: ['openDirectory', 'createDirectory']
-  });
-  if (result.canceled || !result.filePaths[0]) {
-    return null;
-  }
-  return result.filePaths[0];
 }

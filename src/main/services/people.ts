@@ -1,113 +1,15 @@
-import { eq, and, isNull, like, or, sql, inArray } from 'drizzle-orm';
+import { eq, and, isNull, like, or, sql } from 'drizzle-orm';
 import { getDatabase } from '../db/connection';
 import * as schema from '../db/schema';
 import { newId, nowIso } from '../utils/id';
 import { normalizePartialDate, defaultDate } from '../utils/dates';
 import { getDeviceMeta } from './settings';
-import type { Person, PersonDetail, LifeEvent, PartialDate, CreatePersonInput, UpdatePersonInput, Sex } from '@shared/types';
-import { getFamiliesForPerson } from './family';
-import { listAssociationsForPerson } from './associations';
-import { listMediaForPerson, getThumbUrls } from './media';
-import { listCitationsForPerson } from './sources';
+import { attachThumbs, loadLifeYears, mapEvent, mapPerson, getPlaceName } from './person-mapper';
+import { getPersonDetail } from './person-detail';
+import type { Person, LifeEvent, PartialDate, CreatePersonInput, UpdatePersonInput, PersonDetail } from '@shared/types';
 
-type PersonRow = typeof schema.people.$inferSelect;
-type EventRow = typeof schema.events.$inferSelect;
-
-function mapPerson(row: PersonRow, life?: { birthYear?: number | null; deathYear?: number | null }): Person {
-  return {
-    id: row.id,
-    firstName: row.firstName,
-    lastName: row.lastName,
-    middleName: row.middleName,
-    maidenName: row.maidenName,
-    sex: row.sex as Sex,
-    isLiving: row.isLiving,
-    notes: row.notes,
-    primaryPhotoId: row.primaryPhotoId,
-    thumbUrl: null,
-    birthYear: life?.birthYear ?? null,
-    deathYear: life?.deathYear ?? null,
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt,
-    deletedAt: row.deletedAt
-  };
-}
-
-async function loadLifeYears(personIds: string[]): Promise<Map<string, { birthYear?: number | null; deathYear?: number | null }>> {
-  const map = new Map<string, { birthYear?: number | null; deathYear?: number | null }>();
-  if (personIds.length === 0) {
-    return map;
-  }
-
-  const db = getDatabase();
-  const rows = await db
-    .select()
-    .from(schema.events)
-    .where(
-      and(
-        inArray(schema.events.personId, personIds),
-        isNull(schema.events.deletedAt),
-        or(eq(schema.events.type, 'birth'), eq(schema.events.type, 'death'))
-      )
-    );
-
-  for (const id of personIds) {
-    map.set(id, {});
-  }
-  for (const ev of rows) {
-    if (!ev.personId) {
-      continue;
-    }
-    const entry = map.get(ev.personId) ?? {};
-    if (ev.type === 'birth') {
-      entry.birthYear = ev.dateYear;
-    }
-    if (ev.type === 'death') {
-      entry.deathYear = ev.dateYear;
-    }
-    map.set(ev.personId, entry);
-  }
-  return map;
-}
-
-function mapEvent(row: EventRow, placeName?: string | null): LifeEvent {
-  return {
-    id: row.id,
-    type: row.type as LifeEvent['type'],
-    customLabel: row.customLabel,
-    personId: row.personId,
-    familyId: row.familyId,
-    placeId: row.placeId,
-    placeName: placeName ?? null,
-    description: row.description,
-    latitude: row.latitude ?? null,
-    longitude: row.longitude ?? null,
-    date: {
-      year: row.dateYear,
-      month: row.dateMonth,
-      day: row.dateDay,
-      hour: row.dateHour,
-      minute: row.dateMinute,
-      precision: row.datePrecision as PartialDate['precision'],
-      originalText: row.dateOriginalText,
-      sortKey: row.dateSortKey
-    },
-    createdAt: row.createdAt,
-    updatedAt: row.updatedAt
-  };
-}
-
-async function getPlaceName(placeId: string | null): Promise<string | null> {
-  if (!placeId) {
-    return null;
-  }
-  const db = getDatabase();
-  const [place] = await db
-    .select()
-    .from(schema.places)
-    .where(and(eq(schema.places.id, placeId), isNull(schema.places.deletedAt)));
-  return place?.name ?? null;
-}
+export { getPersonDetail } from './person-detail';
+export { mapPerson, loadLifeYears } from './person-mapper';
 
 export async function upsertPlaceByName(name: string | undefined): Promise<string | null> {
   if (!name?.trim()) {
@@ -200,15 +102,6 @@ export async function listPeople(): Promise<Person[]> {
   return attachThumbs(rows.map((r) => mapPerson(r, life.get(r.id))));
 }
 
-export async function attachThumbs(people: Person[]): Promise<Person[]> {
-  const ids = people.map((p) => p.primaryPhotoId).filter((id): id is string => Boolean(id));
-  const thumbs = await getThumbUrls(ids);
-  return people.map((p) => ({
-    ...p,
-    thumbUrl: p.primaryPhotoId ? (thumbs.get(p.primaryPhotoId) ?? null) : null
-  }));
-}
-
 export async function searchPeople(query: string): Promise<Person[]> {
   const q = `%${query.trim().toLowerCase()}%`;
   const db = getDatabase();
@@ -228,57 +121,6 @@ export async function searchPeople(query: string): Promise<Person[]> {
     );
   const life = await loadLifeYears(rows.map((r) => r.id));
   return attachThumbs(rows.map((r) => mapPerson(r, life.get(r.id))));
-}
-
-export async function getPersonDetail(id: string): Promise<PersonDetail | null> {
-  const db = getDatabase();
-  const [row] = await db
-    .select()
-    .from(schema.people)
-    .where(and(eq(schema.people.id, id), isNull(schema.people.deletedAt)));
-  if (!row) {
-    return null;
-  }
-
-  const events = await db
-    .select()
-    .from(schema.events)
-    .where(and(eq(schema.events.personId, id), isNull(schema.events.deletedAt)));
-
-  const mappedEvents: LifeEvent[] = [];
-  for (const e of events) {
-    mappedEvents.push(mapEvent(e, await getPlaceName(e.placeId)));
-  }
-
-  const birthEvent = mappedEvents.find((e) => e.type === 'birth') ?? null;
-  const deathEvent = mappedEvents.find((e) => e.type === 'death') ?? null;
-  const burialEvent = mappedEvents.find((e) => e.type === 'burial') ?? null;
-  const otherEvents = mappedEvents.filter((e) => e.type !== 'birth' && e.type !== 'death' && e.type !== 'burial');
-
-  const familyEvents = await db.select().from(schema.events).where(isNull(schema.events.deletedAt));
-
-  const partnerFamilyIds = await getFamiliesForPerson(id);
-  const familyIds = new Set(partnerFamilyIds.map((f) => f.id));
-  for (const fe of familyEvents) {
-    if (fe.familyId && familyIds.has(fe.familyId)) {
-      otherEvents.push(mapEvent(fe, await getPlaceName(fe.placeId)));
-    }
-  }
-
-  otherEvents.sort((a, b) => (b.date.sortKey ?? 0) - (a.date.sortKey ?? 0));
-
-  const [person] = await attachThumbs([mapPerson(row, (await loadLifeYears([id])).get(id))]);
-  return {
-    ...person,
-    birthEvent,
-    deathEvent,
-    burialEvent,
-    events: otherEvents,
-    families: partnerFamilyIds,
-    associations: await listAssociationsForPerson(id),
-    media: await listMediaForPerson(id),
-    citations: await listCitationsForPerson(id)
-  };
 }
 
 export async function createPerson(input: CreatePersonInput): Promise<PersonDetail> {
@@ -307,8 +149,8 @@ export async function createPerson(input: CreatePersonInput): Promise<PersonDeta
     await upsertEventRecord({
       type: 'birth',
       personId: id,
-      placeName: input.birth.placeName,
-      description: input.birth.description,
+      placeName: input.birth.placeName ?? undefined,
+      description: input.birth.description ?? undefined,
       date: input.birth.date ?? defaultDate()
     });
   }
@@ -317,8 +159,8 @@ export async function createPerson(input: CreatePersonInput): Promise<PersonDeta
     await upsertEventRecord({
       type: 'death',
       personId: id,
-      placeName: input.death.placeName,
-      description: input.death.description,
+      placeName: input.death.placeName ?? undefined,
+      description: input.death.description ?? undefined,
       date: input.death.date ?? defaultDate()
     });
   }
@@ -327,8 +169,8 @@ export async function createPerson(input: CreatePersonInput): Promise<PersonDeta
     await upsertEventRecord({
       type: 'burial',
       personId: id,
-      placeName: input.burial.placeName,
-      description: input.burial.description,
+      placeName: input.burial.placeName ?? undefined,
+      description: input.burial.description ?? undefined,
       latitude: input.burial.latitude,
       longitude: input.burial.longitude,
       date: input.burial.date ?? defaultDate()
@@ -370,8 +212,8 @@ export async function updatePerson(input: UpdatePersonInput): Promise<PersonDeta
       id: birthId,
       type: 'birth',
       personId: input.id,
-      placeName: input.birth?.placeName,
-      description: input.birth?.description,
+      placeName: input.birth?.placeName ?? undefined,
+      description: input.birth?.description ?? undefined,
       date: input.birth?.date ?? defaultDate()
     });
   }
@@ -386,8 +228,8 @@ export async function updatePerson(input: UpdatePersonInput): Promise<PersonDeta
       id: deathId,
       type: 'death',
       personId: input.id,
-      placeName: input.death?.placeName,
-      description: input.death?.description,
+      placeName: input.death?.placeName ?? undefined,
+      description: input.death?.description ?? undefined,
       date: input.death?.date ?? defaultDate()
     });
   }
@@ -402,7 +244,7 @@ export async function updatePerson(input: UpdatePersonInput): Promise<PersonDeta
       id: burialId,
       type: 'burial',
       personId: input.id,
-      placeName: input.burial?.placeName,
+      placeName: input.burial?.placeName ?? undefined,
       description: input.burial?.description ?? detail.burialEvent?.description ?? undefined,
       latitude: input.burial?.latitude ?? null,
       longitude: input.burial?.longitude ?? null,
@@ -476,5 +318,3 @@ export async function searchPlaces(query: string): Promise<Array<{ id: string; n
     .limit(20);
   return rows;
 }
-
-export { mapPerson, loadLifeYears };

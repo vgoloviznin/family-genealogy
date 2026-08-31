@@ -12,11 +12,13 @@ vi.mock('electron', () => ({
     getPath: (name: string) => (name === 'userData' ? userDataDir : tmpdir())
   },
   BrowserWindow: {
-    getAllWindows: () => []
+    getAllWindows: () => [],
+    getFocusedWindow: () => null
   },
   dialog: {
     showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
-    showSaveDialog: vi.fn(async () => ({ canceled: true, filePath: undefined }))
+    showSaveDialog: vi.fn(async () => ({ canceled: true, filePath: undefined })),
+    showMessageBox: vi.fn(async () => ({ response: 0 }))
   },
   nativeImage: {
     createFromPath: () => ({ isEmpty: () => true }),

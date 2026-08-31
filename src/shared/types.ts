@@ -77,8 +77,21 @@ export const IPC_CHANNELS = {
 
   UNDO_PUSH: 'undo:push',
   UNDO_PERFORM: 'undo:perform',
-  UNDO_CAN: 'undo:can'
+  UNDO_CAN: 'undo:can',
+
+  DIALOG_CONFIRM: 'dialog:confirm',
+
+  APP_PREPARE_QUIT: 'app:prepare-quit',
+  APP_PREPARE_QUIT_DONE: 'app:prepare-quit-done'
 } as const;
+
+export type ConfirmDialogOptions = {
+  message: string;
+  detail?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+};
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
@@ -446,6 +459,12 @@ export interface Api {
   };
   menu: {
     onCommand: (callback: (command: MenuCommand) => void) => () => void;
+  };
+  dialog: {
+    confirm: (options: ConfirmDialogOptions) => Promise<boolean>;
+  };
+  app: {
+    onPrepareQuit: (handler: () => Promise<boolean>) => () => void;
   };
 }
 
