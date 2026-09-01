@@ -13,6 +13,7 @@ import {
   restoreCitation,
   updateSource
 } from '@main/services/sources';
+import { localizedErrorMessage } from '../../helpers/localized-error';
 
 vi.mock('@main/services/settings', () => ({
   getDeviceMeta: () => ({ deviceId: 'test-device', label: 'tester' }),
@@ -48,9 +49,9 @@ describe.skipIf(!isSqliteAvailable())('sources service', () => {
       expect(source.details).toBe('1890–1900');
       expect(source.notes).toBe('Архив');
 
-      const updated = await updateSource({ id: source.id, title: 'Перепись 1897', type: 'census' });
+      const updated = await updateSource({ id: source.id, title: 'Перепись 1897', type: 'archive' });
       expect(updated.title).toBe('Перепись 1897');
-      expect(updated.type).toBe('census');
+      expect(updated.type).toBe('archive');
 
       const listed = await listSources();
       expect(listed.map((s) => s.id)).toContain(source.id);
@@ -76,7 +77,7 @@ describe.skipIf(!isSqliteAvailable())('sources service', () => {
 
       const withInline = await createCitation({
         personId: person.id,
-        newSource: { title: 'Interview notes', type: 'interview' },
+        newSource: { title: 'Interview notes', type: 'oral' },
         excerpt: 'Remembers grandmother'
       });
       expect(withInline.source.title).toBe('Interview notes');
@@ -93,8 +94,8 @@ describe.skipIf(!isSqliteAvailable())('sources service', () => {
     try {
       const person = await createPerson({ firstName: 'Ivan', lastName: 'Ivanov' });
 
-      await expect(createCitation({ personId: person.id })).rejects.toThrow('Укажите источник');
-      await expect(createCitation({ sourceId: 'missing-source' })).rejects.toThrow('Цитата должна относиться к человеку или событию');
+      await expect(createCitation({ personId: person.id })).rejects.toThrow(localizedErrorMessage('errors.sourceRequired'));
+      await expect(createCitation({ sourceId: 'missing-source' })).rejects.toThrow(localizedErrorMessage('errors.citationNeedsSubject'));
     } finally {
       project.cleanup();
     }

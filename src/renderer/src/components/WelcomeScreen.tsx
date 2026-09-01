@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { RecentProject } from '@shared/types';
+import type { AppLocale, RecentProject } from '@shared/types';
 import { normalizeRecentProjects } from '@shared/recents';
+import { LocaleSelect } from './LocaleSelect';
 
 interface Props {
+  locale: AppLocale;
+  onLocaleChange: (locale: AppLocale) => void;
   recents: RecentProject[];
   onCreate: (name: string) => void;
   onOpen: () => void;
@@ -11,17 +14,29 @@ interface Props {
   onOpenRecent: (path: string) => void;
 }
 
-export function WelcomeScreen({ recents, onCreate, onOpen, onImport, onOpenRecent }: Props) {
+export function WelcomeScreen({ locale, onLocaleChange, recents, onCreate, onOpen, onImport, onOpenRecent }: Props) {
   const { t } = useTranslation();
-  const [name, setName] = useState('Моё семейное древо');
+  const [name, setName] = useState(t('defaultProjectName'));
+  const nameEdited = useRef(false);
   const items = normalizeRecentProjects(recents);
+
+  useEffect(() => {
+    if (!nameEdited.current) {
+      setName(t('defaultProjectName'));
+    }
+  }, [t]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#f4f1eb] to-[#e8e0d4] p-8">
       <div className="max-w-lg w-full bg-white/90 rounded-2xl shadow-lg p-8 border border-stone-200">
-        <div className="mb-8">
-          <h1 className="text-3xl font-serif text-stone-800 mb-1">{t('appTitle')}</h1>
-          <p className="text-stone-500">Локальный архив семьи с экспортом в один файл</p>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-serif text-stone-800 mb-1">{t('appTitle')}</h1>
+            <p className="text-stone-500">{t('welcomeSubtitle')}</p>
+          </div>
+          <div className="w-40 shrink-0">
+            <LocaleSelect value={locale} onChange={onLocaleChange} />
+          </div>
         </div>
 
         {items.length > 0 && (
@@ -46,7 +61,14 @@ export function WelcomeScreen({ recents, onCreate, onOpen, onImport, onOpenRecen
         )}
 
         <label className="block text-sm text-stone-600 mb-1">{t('projectName')}</label>
-        <input className="w-full border border-stone-300 rounded-lg px-3 py-2 mb-4" value={name} onChange={(e) => setName(e.target.value)} />
+        <input
+          className="w-full border border-stone-300 rounded-lg px-3 py-2 mb-4"
+          value={name}
+          onChange={(e) => {
+            nameEdited.current = true;
+            setName(e.target.value);
+          }}
+        />
 
         <div className="flex flex-col gap-2">
           <button className="bg-stone-800 text-white rounded-lg py-2.5 hover:bg-stone-700" onClick={() => onCreate(name)}>

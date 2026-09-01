@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 interface Props {
   personId: string;
   thumbUrl?: string | null;
@@ -11,6 +13,9 @@ const sizeClass = {
 } as const;
 
 export function PersonAvatar({ personId, thumbUrl, size = 'md', onUpdated }: Props) {
+  const { t } = useTranslation();
+  const title = thumbUrl ? t('avatar.changePhoto') : t('avatar.addPhoto');
+
   const pickPhoto = async () => {
     const items = await window.api.media.add({
       personId,
@@ -26,8 +31,8 @@ export function PersonAvatar({ personId, thumbUrl, size = 'md', onUpdated }: Pro
   return (
     <button
       type="button"
-      title={thumbUrl ? 'Сменить фото' : 'Добавить фото'}
-      aria-label={thumbUrl ? 'Сменить фото' : 'Добавить фото'}
+      title={title}
+      aria-label={title}
       onClick={() => void pickPhoto()}
       className={`relative shrink-0 overflow-hidden border border-stone-300 bg-stone-100 group hover:border-stone-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-stone-500 ${sizeClass[size]}`}
     >
@@ -37,7 +42,7 @@ export function PersonAvatar({ personId, thumbUrl, size = 'md', onUpdated }: Pro
         <span className="absolute inset-0 flex items-center justify-center text-stone-400 text-lg leading-none">+</span>
       )}
       <span className="absolute inset-0 flex items-center justify-center bg-black/45 text-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-        {thumbUrl ? 'Сменить' : 'Фото'}
+        {thumbUrl ? t('avatar.changeShort') : t('avatar.photoShort')}
       </span>
     </button>
   );

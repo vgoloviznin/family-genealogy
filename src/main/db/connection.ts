@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { drizzle, BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { join } from 'path';
+import { localizedError } from '../i18n';
 import * as schema from './schema';
 
 export type AppDatabase = BetterSQLite3Database<typeof schema>;
@@ -23,7 +24,7 @@ export function openDatabase(projectPath: string): AppDatabase {
 
 export function getDatabase(): AppDatabase {
   if (!db) {
-    throw new Error('Database not open');
+    throw new Error(localizedError('errors.databaseNotOpen'));
   }
   return db;
 }
@@ -34,7 +35,7 @@ export function getDatabasePath(): string | null {
 
 export function getSqlite(): Database.Database {
   if (!sqlite) {
-    throw new Error('Database not open');
+    throw new Error(localizedError('errors.databaseNotOpen'));
   }
   return sqlite;
 }

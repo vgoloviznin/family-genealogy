@@ -12,6 +12,7 @@ import { createPerson, listPeople, updatePerson } from '@main/services/people';
 import { packProjectArchive } from '@main/services/pack';
 import { applyBatchSync, previewBatchSync, sortArchivePaths } from '@main/services/merge-batch';
 import { newId } from '@main/utils/id';
+import { localizedErrorMessage } from '../../helpers/localized-error';
 
 vi.mock('@main/services/settings', () => ({
   getDeviceMeta: () => ({ deviceId: 'batch-sync-device', label: 'tester' }),
@@ -171,7 +172,7 @@ describe.skipIf(!isSqliteAvailable())('merge-batch', () => {
         expect(preview.unresolvedConflicts).toBe(1);
         expect(preview.allConflicts[0].id).toBe(person.id);
         expect(preview.allConflicts[0].remote.notes).toBe('remote-two');
-        expect(preview.previewNote).toMatch(/из архива/);
+        expect(preview.previewNoteKey).toBe('mergeBatchPreviewNote');
 
         const applied = await applyBatchSync(preview.archivePaths, [{ table: 'people', id: person.id, choice: 'local' }]);
         expect(applied.conflictsResolved).toBeGreaterThanOrEqual(1);
@@ -205,12 +206,12 @@ describe.skipIf(!isSqliteAvailable())('merge-batch', () => {
       await packProjectArchive(otherFiles.path, archivePath, 'export');
 
       openProjectAtPath(local.path);
-      await expect(previewBatchSync([archivePath])).rejects.toThrow('Это архив другого проекта');
+      await expect(previewBatchSync([archivePath])).rejects.toThrow(localizedErrorMessage('errors.wrongProjectArchive'));
 
       const afterPreview = await listPeople();
       expect(afterPreview.map((p) => p.id).sort()).toEqual(beforeIds);
 
-      await expect(applyBatchSync([archivePath], [])).rejects.toThrow('Это архив другого проекта');
+      await expect(applyBatchSync([archivePath], [])).rejects.toThrow(localizedErrorMessage('errors.wrongProjectArchive'));
       const afterApply = await listPeople();
       expect(afterApply.map((p) => p.id).sort()).toEqual(beforeIds);
       expect(afterApply.some((p) => p.firstName === 'Only' && p.lastName === 'Local')).toBe(true);

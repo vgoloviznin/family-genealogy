@@ -78,13 +78,13 @@ export function PersonDetailPanel({
         }
         if (!current.firstName.trim() && !current.lastName.trim()) {
           if (mode === 'manual') {
-            setSaveError('Укажите имя или фамилию');
+            setSaveError(t('personDetail.nameRequired'));
           }
           return false;
         }
         const burialCoords = current.isLiving ? null : parseCoordinates(current.burialCoords);
         if (!current.isLiving && current.burialCoords.trim() && !burialCoords) {
-          setSaveError('Укажите координаты в формате: 55.7558, 37.6173');
+          setSaveError(t('personDetail.coordinatesInvalid'));
           return false;
         }
         setSaveError('');
@@ -122,7 +122,7 @@ export function PersonDetailPanel({
         lastSavedRef.current = snapshot;
         setLastSaved(snapshot);
         onDirtyChange(false);
-        onSaveNotice(mode === 'auto' ? 'Сохранено автоматически' : 'Сохранено');
+        onSaveNotice(mode === 'auto' ? t('personDetail.savedAuto') : t('personDetail.saved'));
         await onRefresh();
         return true;
       })();
@@ -133,7 +133,7 @@ export function PersonDetailPanel({
         savingRef.current = null;
       }
     },
-    [onSave, onRefresh, onDirtyChange, onSaveNotice]
+    [onSave, onRefresh, onDirtyChange, onSaveNotice, t]
   );
 
   useEffect(() => {
@@ -172,12 +172,12 @@ export function PersonDetailPanel({
   };
 
   const tabs = [
-    ['info', 'Данные', null],
+    ['info', t('personDetail.tabInfo'), null],
     ['family', t('family'), person.families.length || null],
     ['events', t('events'), allEventsCount || null],
     ['associations', t('associations'), person.associations.length || null],
     ['media', t('media'), person.media.length || null],
-    ['sources', 'Источники', person.citations.length || null]
+    ['sources', t('sources'), person.citations.length || null]
   ] as const;
 
   return (
@@ -189,8 +189,10 @@ export function PersonDetailPanel({
             <h2 className="text-xl font-serif">{personLabel(person)}</h2>
             <p className="text-sm text-stone-500 mt-1">{formatLifeSpan(person)}</p>
           </div>
-          {person.isLiving && <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full shrink-0">жив</span>}
-          {dirty && <span className="text-xs text-amber-700 shrink-0">не сохранено</span>}
+          {person.isLiving && (
+            <span className="text-xs bg-emerald-100 text-emerald-800 px-2 py-1 rounded-full shrink-0">{t('personDetail.livingBadge')}</span>
+          )}
+          {dirty && <span className="text-xs text-amber-700 shrink-0">{t('personDetail.unsaved')}</span>}
           <DangerBtn label={t('delete')} onClick={() => void handleDeletePerson()} />
         </div>
         <div className="flex gap-1 mt-3 flex-wrap">

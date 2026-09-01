@@ -1,4 +1,6 @@
 import type { DatePrecision, PartialDate } from '@shared/types';
+import { formatPartialDate as formatPartialDateForLocale } from '@shared/format-partial-date';
+import { getAppLocale } from '../i18n';
 
 export function computeSortKey(date: PartialDate): number | null {
   const { year, month, day, precision } = date;
@@ -18,32 +20,7 @@ export function normalizePartialDate(input: PartialDate): PartialDate {
 }
 
 export function formatPartialDate(date: PartialDate): string {
-  if (date.originalText) {
-    return date.originalText;
-  }
-  const parts: string[] = [];
-  if (date.precision === 'circa') {
-    parts.push('ок.');
-  }
-  if (date.precision === 'before') {
-    parts.push('до');
-  }
-  if (date.precision === 'after') {
-    parts.push('после');
-  }
-  if (date.day) {
-    parts.push(String(date.day).padStart(2, '0'));
-  }
-  if (date.month) {
-    parts.push(String(date.month).padStart(2, '0'));
-  }
-  if (date.year) {
-    parts.push(String(date.year));
-  }
-  if (date.hour != null && date.minute != null) {
-    parts.push(`${String(date.hour).padStart(2, '0')}:${String(date.minute).padStart(2, '0')}`);
-  }
-  return parts.join('.') || '—';
+  return formatPartialDateForLocale(date, getAppLocale());
 }
 
 export const defaultDate = (): PartialDate => ({

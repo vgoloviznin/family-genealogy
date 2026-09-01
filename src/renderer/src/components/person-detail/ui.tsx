@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Sex } from '@shared/types';
 import { personLabel, formatLifeSpan } from '../../lib/labels';
 
@@ -75,6 +76,7 @@ export function RelRow({
   extra?: ReactNode;
   onUnlink: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="flex items-center gap-2 flex-wrap rounded-lg border border-stone-300 bg-stone-50 px-2.5 py-1.5">
       {role && <span className="text-xs font-medium text-stone-500 w-[4.75rem] shrink-0">{role}</span>}
@@ -84,7 +86,7 @@ export function RelRow({
       <span className="text-xs text-stone-600 shrink-0">{formatLifeSpan(person)}</span>
       {extra}
       <span className="ml-auto">
-        <DangerBtn label="отвязать" onClick={onUnlink} />
+        <DangerBtn label={t('personDetail.unlink')} onClick={onUnlink} />
       </span>
     </div>
   );

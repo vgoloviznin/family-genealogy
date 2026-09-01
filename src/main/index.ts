@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu, protocol, net, nativeImage, shell, ipcMain } from 'electron';
+import { app, BrowserWindow, protocol, net, nativeImage, shell, ipcMain } from 'electron';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
 import iconPng from '../../resources/icon.png?asset';
@@ -6,7 +6,12 @@ import { registerIpcHandlers } from './ipc/register';
 import { resolveMediaPath } from './services/media';
 import { backupOnQuitIfEnabled, handleOpenFgtreeFile } from './services/pack';
 import { closeProject } from './services/project';
+import { getSettings } from './services/settings';
+import { initAppLocale } from './i18n';
+import { applyAppLocale } from './locale';
+import { setMenuWindow } from './menu';
 import { IPC_CHANNELS } from '@shared/types';
+import { validateLocale } from '@shared/locales';
 
 let mainWindow: BrowserWindow | null = null;
 let cachedAppIcon: Electron.NativeImage | null = null;
@@ -66,6 +71,7 @@ function createWindow(): void {
   });
 
   mainWindow.on('ready-to-show', () => mainWindow?.show());
+  setMenuWindow(mainWindow);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https://') || url.startsWith('http://')) {
@@ -81,50 +87,11 @@ function createWindow(): void {
   }
 }
 
-function buildMenu(): void {
-  const template: Electron.MenuItemConstructorOptions[] = [
-    {
-      label: 'Файл',
-      submenu: [
-        { label: 'Создать проект', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('menu:command', 'createProject') },
-        { label: 'Открыть проект', accelerator: 'CmdOrCtrl+O', click: () => mainWindow?.webContents.send('menu:command', 'openProject') },
-        { type: 'separator' },
-        { label: 'Импорт .fgtree', click: () => mainWindow?.webContents.send('menu:command', 'import') },
-        { label: 'Синхронизировать из архива…', click: () => mainWindow?.webContents.send('menu:command', 'sync') },
-        { label: 'Синхронизировать несколько архивов…', click: () => mainWindow?.webContents.send('menu:command', 'syncBatch') },
-        { label: 'Экспорт .fgtree', click: () => mainWindow?.webContents.send('menu:command', 'export') },
-        { label: 'Бэкап', click: () => mainWindow?.webContents.send('menu:command', 'backup') },
-        { label: 'Восстановить', click: () => mainWindow?.webContents.send('menu:command', 'restore') },
-        { type: 'separator' },
-        { role: 'quit', label: 'Выход' }
-      ]
-    },
-    {
-      label: 'Правка',
-      submenu: [
-        { label: 'Отменить', accelerator: 'CmdOrCtrl+Z', click: () => mainWindow?.webContents.send('menu:command', 'undo') },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
-        { role: 'selectAll' }
-      ]
-    },
-    {
-      label: 'Вид',
-      submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }]
-    },
-    {
-      label: 'Справка',
-      submenu: [
-        {
-          label: 'Как синхронизироваться…',
-          click: () => mainWindow?.webContents.send('menu:command', 'syncHelp')
-        }
-      ]
-    }
-  ];
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+function rebuildMenu(): void {
+  applyAppLocale(getSettings().locale);
 }
+
+export { mainWindow };
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -149,6 +116,8 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     setDockIcon();
+    const locale = validateLocale(getSettings().locale);
+    initAppLocale(locale);
 
     protocol.handle('family-media', (request) => {
       const url = new URL(request.url);
@@ -161,7 +130,7 @@ if (!gotLock) {
     });
 
     registerIpcHandlers();
-    buildMenu();
+    rebuildMenu();
     createWindow();
 
     const fgtreeArg = process.argv.find((a) => a.endsWith('.fgtree'));
@@ -240,5 +209,3 @@ if (!gotLock) {
     }
   });
 }
-
-export { mainWindow };

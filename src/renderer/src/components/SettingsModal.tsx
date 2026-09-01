@@ -1,14 +1,19 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AppSettings } from '@shared/types';
+import type { AppLocale, AppSettings } from '@shared/types';
+import { LocaleSelect } from './LocaleSelect';
 
 export function SettingsModal({
   settings,
+  locale,
+  onLocaleChange,
   projectName,
   onClose,
   onSave
 }: {
   settings: AppSettings;
+  locale: AppLocale;
+  onLocaleChange: (locale: AppLocale) => void;
   projectName: string;
   onClose: () => void;
   onSave: (partial: Partial<AppSettings>, projectName: string) => Promise<void>;
@@ -24,6 +29,7 @@ export function SettingsModal({
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
       <div className="bg-white rounded-xl p-6 w-full max-w-md space-y-4 shadow-xl">
         <h2 className="text-lg font-medium">{t('settings')}</h2>
+        <LocaleSelect value={locale} onChange={onLocaleChange} />
         <label className="block text-sm">
           {t('projectName')}
           <input className="w-full border rounded px-2 py-1 mt-1" value={name} onChange={(e) => setName(e.target.value)} />
@@ -39,7 +45,7 @@ export function SettingsModal({
               className="flex-1 border rounded px-2 py-1"
               value={backupFolder}
               onChange={(e) => setBackupFolder(e.target.value)}
-              placeholder="По умолчанию: Backups в папке проекта"
+              placeholder={t('backupFolderPlaceholder')}
             />
             <button
               className="border rounded px-2 text-sm"
@@ -60,7 +66,7 @@ export function SettingsModal({
           {t('backupOnQuit')}
         </label>
         <label className="block text-sm">
-          Хранить копий
+          {t('backupKeepCount')}
           <input
             type="number"
             min={1}

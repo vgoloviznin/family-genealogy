@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeUnionType, UNION_TYPE_LABELS } from '@shared/union-type';
+import { normalizeUnionType } from '@shared/union-type';
 
 describe('normalizeUnionType', () => {
   it('keeps known union types', () => {
@@ -11,11 +11,5 @@ describe('normalizeUnionType', () => {
     expect(normalizeUnionType(null)).toBe('unknown');
     expect(normalizeUnionType('')).toBe('unknown');
     expect(normalizeUnionType('invalid')).toBe('unknown');
-  });
-});
-
-describe('UNION_TYPE_LABELS', () => {
-  it('includes a clear option', () => {
-    expect(UNION_TYPE_LABELS.unknown).toBe('Не указан');
   });
 });

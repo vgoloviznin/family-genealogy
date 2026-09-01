@@ -12,7 +12,7 @@ Desktop-приложение для ведения семейного архив
 
 - **Electron 37** + **electron-vite** + **React 19** + **TypeScript**
 - **SQLite** (`better-sqlite3`) + миграции в `src/main/db/connection.ts`
-- **Tailwind CSS 4**, **@xyflow/react** (дерево), **i18next** (RU)
+- **Tailwind CSS 4**, **@xyflow/react** (дерево), **i18next** (ru / en / it)
 - Портable-архив **`.fgtree`** (ZIP64): экспорт, импорт, бэкап, **синхронизация (merge)**
 
 ## Структура
@@ -33,7 +33,15 @@ tests/        — unit-тесты (зеркало src/ + helpers, setup)
 3. **Схема БД** — правки в `schema.ts` + `CREATE TABLE IF NOT EXISTS` в `connection.ts`; при смене версии — `SCHEMA_VERSION` и обновление `project.json`.
 4. **Мягкое удаление** — `deletedAt` для people, events, associations, media, sources, citations.
 5. **Обмен данными** — только через `.fgtree`, не синхронизировать живой SQLite через облако (iCloud/Dropbox и т.п. для папки проекта — предупреждение в UI).
-6. **Язык UI** — русский (`src/renderer/src/i18n.ts`).
+6. **Язык UI** — ru (по умолчанию), en, it; выбор на экране приветствия и в настройках. Новые строки — только через ключи в `src/shared/locales/`.
+   - **Renderer**: `react-i18next` (`src/renderer/src/i18n.ts`), компоненты — `useTranslation()` / `t('key')`.
+   - **Main / shared без React**: `translate(locale, key)` из `@shared/locales`; в main — `localizedError(key)` / `t(getAppLocale(), key)` из `src/main/i18n.ts`. При старте и смене языка: `initAppLocale` / `applyAppLocale` (меню).
+   - **IPC**: смена языка в renderer вызывает `window.api.settings.set({ locale })` → `applyAppLocale` в main.
+   - **Ошибки пользователю**: ключи в `errors.*`; в `@shared` (например `pack-manifest`) — `translate(locale, …)` с `locale` из `getAppLocale()` в main; не хардкодить текст.
+   - **Batch merge preview**: `previewNoteKey` (ключ локали), не готовая строка — UI рендерит через `t()`.
+   - **Тесты**: `tests/helpers/localized-error.ts` → `localizedErrorMessage('errors.*')`, не русский текст в `toThrow`.
+   - **Пример ошибки в сервисе**: `throw new Error(localizedError('errors.personNotFound'));`
+   - **Пример в `@shared`**: `throw new Error(translate(locale, 'errors.invalidArchiveFormat'));` — `locale` из `getAppLocale()` в main.
 7. **Не добавлять без запроса**: GEDCOM, полнотекстовый поиск, **автоматическое слияние дубликатов людей** (один человек — два UUID).
 
 ## Синхронизация проектов (`.fgtree` merge)
@@ -95,7 +103,7 @@ Unit-тесты на **vitest** (`tests/**/*.test.ts`):
 - **tests/helpers** — фикстуры проекта (`project-fixture.ts`), проверка SQLite
 - **tests/setup** — мок Electron (`vitest.setup.ts`)
 
-Electron-диалоги и окна мокаются в `src/main/test/vitest.setup.ts`. Для service-тестов с SQLite может понадобиться `npm rebuild better-sqlite3`, если native-модуль собран под другую версию Node (Electron vs системный Node для vitest).
+Electron-диалоги и окна мокаются в `tests/setup/vitest.setup.ts` (`initAppLocale('ru')`, мок `Menu`). Для service-тестов с SQLite может понадобиться `npm rebuild better-sqlite3`, если native-модуль собран под другую версию Node (Electron vs системный Node для vitest).
 
 ## Безопасность
 

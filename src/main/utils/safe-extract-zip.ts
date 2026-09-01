@@ -2,13 +2,14 @@ import { createWriteStream, mkdirSync } from 'fs';
 import { dirname, resolve, sep } from 'path';
 import { pipeline } from 'stream/promises';
 import yauzl from 'yauzl';
+import { zipError } from './zip-errors';
 
 function resolveEntryPath(destDir: string, entryName: string): string {
   const normalized = entryName.replace(/\\/g, '/');
   const destPath = resolve(destDir, normalized);
   const root = resolve(destDir);
   if (destPath !== root && !destPath.startsWith(root + sep)) {
-    throw new Error(`Unsafe zip entry path: ${entryName}`);
+    throw zipError('errors.unsafeZipEntry', { path: entryName });
   }
   return destPath;
 }
@@ -24,7 +25,7 @@ export async function extractZip(archivePath: string, options: { dir: string }):
   await new Promise<void>((resolvePromise, reject) => {
     yauzl.open(archivePath, { lazyEntries: true, autoClose: true }, (err, zipfile) => {
       if (err || !zipfile) {
-        reject(err ?? new Error('Failed to open zip archive'));
+        reject(zipError('errors.zipOpenFailed'));
         return;
       }
 
@@ -35,7 +36,7 @@ export async function extractZip(archivePath: string, options: { dir: string }):
 
       zipfile.on('entry', (entry) => {
         if (isUnixSymlink(entry)) {
-          fail(new Error(`Unsafe zip entry (symlink): ${entry.fileName}`));
+          fail(zipError('errors.unsafeZipSymlink', { path: entry.fileName }));
           return;
         }
 
@@ -51,7 +52,7 @@ export async function extractZip(archivePath: string, options: { dir: string }):
 
         zipfile.openReadStream(entry, (readErr, readStream) => {
           if (readErr || !readStream) {
-            fail(readErr ?? new Error(`Failed to read zip entry: ${entry.fileName}`));
+            fail(zipError('errors.zipReadFailed', { path: entry.fileName }));
             return;
           }
 

@@ -7,6 +7,7 @@ import { newId, nowIso } from '../utils/id';
 import { isCloudSyncedPath } from '../utils/paths';
 import { addRecentProject, getSettings, pruneRecentProjects } from './settings';
 import { clearUndo } from './undo';
+import { localizedError, t, getAppLocale } from '../i18n';
 import type { ProjectMeta, RecentProject } from '@shared/types';
 
 export interface ProjectJson {
@@ -42,19 +43,19 @@ function ensureProjectDirs(projectPath: string): void {
   mkdirSync(join(projectPath, 'thumbs'), { recursive: true });
 }
 
-export async function createProject(name: string): Promise<ProjectMeta> {
+export async function createProject(name: string): Promise<ProjectMeta | null> {
   const result = await dialog.showOpenDialog({
-    title: 'Выберите папку для нового проекта',
+    title: t(getAppLocale(), 'dialog.createProjectFolder'),
     properties: ['openDirectory', 'createDirectory']
   });
   if (result.canceled || !result.filePaths[0]) {
-    throw new Error('Cancelled');
+    return null;
   }
   const projectPath = result.filePaths[0];
   const entries = existsSync(projectPath) ? readdirSync(projectPath) : [];
   const visible = entries.filter((e) => !e.startsWith('.'));
   if (visible.length > 0) {
-    throw new Error('Папка не пуста. Выберите пустую папку или создайте новую.');
+    throw new Error(localizedError('errors.folderNotEmpty'));
   }
 
   ensureProjectDirs(projectPath);
@@ -70,7 +71,7 @@ export async function createProject(name: string): Promise<ProjectMeta> {
 
 export async function openProject(): Promise<ProjectMeta | null> {
   const result = await dialog.showOpenDialog({
-    title: 'Открыть проект',
+    title: t(getAppLocale(), 'dialog.openProject'),
     properties: ['openDirectory']
   });
   if (result.canceled || !result.filePaths[0]) {
@@ -83,7 +84,7 @@ export function openProjectAtPath(projectPath: string): ProjectMeta {
   const dbFile = join(projectPath, 'family.sqlite');
   const jsonFile = join(projectPath, 'project.json');
   if (!existsSync(jsonFile)) {
-    throw new Error('В папке нет project.json — это не проект Family Geneology.');
+    throw new Error(localizedError('errors.notAProject'));
   }
   if (!existsSync(dbFile)) {
     ensureProjectDirs(projectPath);
@@ -115,7 +116,7 @@ export function openProjectAtPath(projectPath: string): ProjectMeta {
 
 export function requireProject(): ProjectMeta {
   if (!currentProject) {
-    throw new Error('Проект не открыт');
+    throw new Error(localizedError('errors.projectNotOpen'));
   }
   return currentProject;
 }
@@ -159,7 +160,7 @@ export function listRecentProjects(): RecentProject[] {
 export function updateProjectName(name: string): ProjectMeta {
   const trimmed = name.trim();
   if (!trimmed) {
-    throw new Error('Название проекта не может быть пустым');
+    throw new Error(localizedError('errors.projectNameEmpty'));
   }
   const project = requireProject();
   const json = readProjectJson(project.path);

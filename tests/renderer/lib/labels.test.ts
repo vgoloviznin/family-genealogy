@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
-import { formatDate, formatLifeSpan, deceasedLabel, personLabel, siblingLabel, spouseLabel } from '@renderer/lib/labels';
+import { beforeEach, describe, expect, it } from 'vitest';
+import i18n from '@renderer/i18n';
+import { formatDate, formatLifeSpan, deceasedLabel, personLabel, siblingLabel, spouseLabel, eventTypeLabel } from '@renderer/lib/labels';
+
+beforeEach(async () => {
+  await i18n.changeLanguage('ru');
+});
 
 describe('personLabel', () => {
   it('joins name parts in Russian order', () => {
@@ -95,5 +100,26 @@ describe('siblingLabel', () => {
     expect(siblingLabel('male')).toBe('Брат');
     expect(siblingLabel('female')).toBe('Сестра');
     expect(siblingLabel()).toBe('Брат/сестра');
+  });
+});
+
+describe('labels en locale', () => {
+  it('translates event type labels', async () => {
+    await i18n.changeLanguage('en');
+    expect(eventTypeLabel('birth')).toBe('Birth');
+    expect(personLabel({ lastName: '', firstName: '' })).toBe('New person');
+    expect(formatLifeSpan({ isLiving: true, birthYear: 1945 })).toBe('b. 1945');
+    expect(spouseLabel('female')).toBe('Wife');
+    await i18n.changeLanguage('ru');
+  });
+});
+
+describe('labels it locale', () => {
+  it('translates key labels', async () => {
+    await i18n.changeLanguage('it');
+    expect(personLabel({ lastName: '', firstName: '' })).toBe('Nuova persona');
+    expect(formatLifeSpan({ isLiving: true })).toBe('vivente');
+    expect(siblingLabel('female')).toBe('Sorella');
+    await i18n.changeLanguage('ru');
   });
 });

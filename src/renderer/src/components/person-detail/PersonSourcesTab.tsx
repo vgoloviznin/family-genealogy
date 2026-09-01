@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PersonDetail, Source, SourceType, LifeEvent } from '@shared/types';
-import { formatDate, EVENT_TYPE_LABELS, SOURCE_TYPE_LABELS, DEATH_RELATED_EVENTS } from '../../lib/labels';
+import { formatDate, eventTypeLabel, sourceTypeLabel, SOURCE_TYPE_CODES, DEATH_RELATED_EVENTS } from '../../lib/labels';
 import { ActionBtn, DangerBtn, EmptyState, Field } from './ui';
 
 interface Props {
@@ -40,7 +40,7 @@ export function PersonSourcesTab({ person, onRefresh, onError }: Props) {
   const addCitation = async () => {
     try {
       if (!citeSourceId && !citeNewTitle.trim()) {
-        onError('Укажите источник или его название');
+        onError(t('personDetail.sourceRequired'));
         return;
       }
       const created = await window.api.citations.create({
@@ -68,13 +68,13 @@ export function PersonSourcesTab({ person, onRefresh, onError }: Props) {
   return (
     <>
       {!showCiteForm ? (
-        <ActionBtn label="Добавить цитату" onClick={() => setShowCiteForm(true)} />
+        <ActionBtn label={t('personDetail.addCitation')} onClick={() => setShowCiteForm(true)} />
       ) : (
         <div className="border rounded-lg p-3 space-y-2 bg-stone-50">
           <label className="block text-sm">
-            Существующий источник
+            {t('personDetail.existingSource')}
             <select className="w-full border rounded px-2 py-1 mt-1" value={citeSourceId} onChange={(e) => setCiteSourceId(e.target.value)}>
-              <option value="">Новый источник</option>
+              <option value="">{t('personDetail.newSourceOption')}</option>
               {sources.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.title}
@@ -84,13 +84,13 @@ export function PersonSourcesTab({ person, onRefresh, onError }: Props) {
           </label>
           {!citeSourceId && (
             <>
-              <Field label="Название источника" value={citeNewTitle} onChange={setCiteNewTitle} />
+              <Field label={t('personDetail.sourceTitle')} value={citeNewTitle} onChange={setCiteNewTitle} />
               <label className="block text-sm">
-                Тип
+                {t('type')}
                 <select className="w-full border rounded px-2 py-1 mt-1" value={citeType} onChange={(e) => setCiteType(e.target.value as SourceType)}>
-                  {Object.entries(SOURCE_TYPE_LABELS).map(([k, v]) => (
+                  {SOURCE_TYPE_CODES.map((k) => (
                     <option key={k} value={k}>
-                      {v}
+                      {sourceTypeLabel(k)}
                     </option>
                   ))}
                 </select>
@@ -98,24 +98,24 @@ export function PersonSourcesTab({ person, onRefresh, onError }: Props) {
             </>
           )}
           <label className="block text-sm">
-            Событие (необязательно)
+            {t('personDetail.eventOptional')}
             <select className="w-full border rounded px-2 py-1 mt-1" value={citeEventId} onChange={(e) => setCiteEventId(e.target.value)}>
-              <option value="">К карточке человека</option>
+              <option value="">{t('personDetail.citationToPerson')}</option>
               {allEvents.map((ev) => (
                 <option key={ev.id} value={ev.id}>
-                  {EVENT_TYPE_LABELS[ev.type] ?? ev.type} · {formatDate(ev.date)}
+                  {eventTypeLabel(ev.type)} · {formatDate(ev.date)}
                 </option>
               ))}
             </select>
           </label>
-          <Field label="Страница / лист" value={citePage} onChange={setCitePage} />
+          <Field label={t('personDetail.citationPage')} value={citePage} onChange={setCitePage} />
           <label className="block text-sm">
-            Выдержка
+            {t('personDetail.excerpt')}
             <textarea className="w-full border rounded px-2 py-1 mt-1" value={citeExcerpt} onChange={(e) => setCiteExcerpt(e.target.value)} />
           </label>
           <div className="flex gap-2">
             <button className="text-sm bg-stone-800 text-white px-3 py-1 rounded-lg" onClick={() => void addCitation()}>
-              Добавить
+              {t('personDetail.add')}
             </button>
             <button className="text-sm border rounded-lg px-3 py-1" onClick={() => setShowCiteForm(false)}>
               {t('cancel')}
@@ -124,7 +124,7 @@ export function PersonSourcesTab({ person, onRefresh, onError }: Props) {
         </div>
       )}
       {person.citations.length === 0 && !showCiteForm ? (
-        <EmptyState text="Источники и цитаты пока не добавлены." />
+        <EmptyState text={t('personDetail.emptySources')} />
       ) : (
         <ul className="space-y-2">
           {person.citations.map((c) => (
@@ -132,12 +132,15 @@ export function PersonSourcesTab({ person, onRefresh, onError }: Props) {
               <div className="flex justify-between gap-2">
                 <div>
                   <strong className="text-stone-900">{c.source.title}</strong>
-                  <span className="text-stone-600"> · {SOURCE_TYPE_LABELS[c.source.type] ?? c.source.type}</span>
-                  {c.page && <div className="text-stone-800 font-medium">стр. {c.page}</div>}
+                  <span className="text-stone-600"> · {sourceTypeLabel(c.source.type)}</span>
+                  {c.page && <div className="text-stone-800 font-medium">{t('personDetail.pageShort', { page: c.page })}</div>}
                   {c.excerpt && <div className="text-stone-600 italic">{c.excerpt}</div>}
                   {c.eventId && (
                     <div className="text-xs text-stone-500 mt-0.5">
-                      к событию: {EVENT_TYPE_LABELS[allEvents.find((e) => e.id === c.eventId)?.type ?? ''] ?? 'событие'}
+                      {t('personDetail.citationForEvent', {
+                        event:
+                          eventTypeLabel(allEvents.find((e) => e.id === c.eventId)?.type ?? '') || t('personDetail.eventFallback')
+                      })}
                     </div>
                   )}
                 </div>

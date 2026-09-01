@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeSortKey, defaultDate, formatPartialDate, normalizePartialDate } from '@main/utils/dates';
+import { initAppLocale, setAppLocale } from '@main/i18n';
 
 describe('computeSortKey', () => {
   it('returns null for unknown precision without year', () => {
@@ -67,7 +68,7 @@ describe('formatPartialDate', () => {
         precision: 'circa',
         year: 1890
       })
-    ).toBe('ок..1890');
+    ).toBe('ок.1890');
   });
 
   it('formats month precision without day', () => {
@@ -90,6 +91,18 @@ describe('formatPartialDate', () => {
   });
 
   it('returns em dash when empty', () => {
+    initAppLocale('ru');
     expect(formatPartialDate(defaultDate())).toBe('—');
+  });
+
+  it('uses english precision labels when locale is en', () => {
+    setAppLocale('en');
+    expect(
+      formatPartialDate({
+        precision: 'before',
+        year: 1917
+      })
+    ).toBe('before.1917');
+    setAppLocale('ru');
   });
 });

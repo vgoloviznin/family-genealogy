@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { DateFields } from '../DateFields';
 import { PlaceField } from '../PlaceField';
 import { CoordinatesField } from '../CoordinatesField';
-import { SEX_LABELS, emptyDate } from '../../lib/labels';
+import { SEX_CODES, sexLabel, emptyDate } from '../../lib/labels';
 import { Field } from './ui';
 import type { PersonFormState } from './helpers';
 
@@ -30,9 +30,9 @@ export function PersonInfoTab({ form, onChange, onSave }: Props) {
             value={form.sex}
             onChange={(e) => onChange({ ...form, sex: e.target.value as typeof form.sex })}
           >
-            {Object.entries(SEX_LABELS).map(([k, v]) => (
+            {SEX_CODES.map((k) => (
               <option key={k} value={k}>
-                {v}
+                {sexLabel(k)}
               </option>
             ))}
           </select>
@@ -75,7 +75,7 @@ export function PersonInfoTab({ form, onChange, onSave }: Props) {
         <button className="bg-stone-800 text-white px-4 py-2 rounded-lg" onClick={onSave}>
           {t('save')}
         </button>
-        <span className="text-xs text-stone-400">Изменения сохраняются сами через секунду</span>
+        <span className="text-xs text-stone-400">{t('personDetail.autoSaveHint')}</span>
       </div>
     </>
   );

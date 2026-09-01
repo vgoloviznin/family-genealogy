@@ -7,6 +7,7 @@ import { createPerson } from './people';
 import { getPersonDetail } from './person-detail';
 import { getFamiliesForPerson } from './family-query';
 import type { CreatePersonInput, PedigreeType, PersonDetail, UnionType } from '@shared/types';
+import { localizedError } from '../i18n';
 
 export { getFamiliesForPerson } from './family-query';
 
@@ -145,7 +146,7 @@ export async function addChildToFamily(familyId: string, childInput: CreatePerso
     .where(and(eq(schema.familyPartners.familyId, familyId), isNull(schema.familyPartners.deletedAt)));
   const parentId = partners[0]?.personId;
   if (!parentId) {
-    throw new Error('Family has no parent');
+    throw new Error(localizedError('errors.familyNoParent'));
   }
   return (await getPersonDetail(child.id))!;
 }
@@ -204,7 +205,7 @@ export async function addSibling(personId: string, siblingInput: CreatePersonInp
 
 export async function linkExistingSibling(personId: string, siblingId: string, pedigree: PedigreeType = 'birth'): Promise<void> {
   if (personId === siblingId) {
-    throw new Error('Нельзя указать человека своим братом или сестрой');
+    throw new Error(localizedError('errors.cannotSelfSibling'));
   }
   const familyId = await getOrCreateFamilyForSibling(personId);
   await linkChildToFamily(familyId, siblingId, pedigree);
@@ -212,12 +213,12 @@ export async function linkExistingSibling(personId: string, siblingId: string, p
 
 export async function linkExistingPartner(personId: string, partnerId: string, unionType: UnionType = 'marriage'): Promise<void> {
   if (personId === partnerId) {
-    throw new Error('Нельзя связать человека с самим собой');
+    throw new Error(localizedError('errors.cannotLinkSelf'));
   }
   const families = await getFamiliesForPerson(personId);
   const already = families.some((f) => f.partners.some((p) => p.id === partnerId));
   if (already) {
-    throw new Error('Эти люди уже супруги');
+    throw new Error(localizedError('errors.alreadySpouses'));
   }
 
   const partnerFamily = families.find((f) => f.partners.length === 1 && f.partners[0]?.id === personId);
@@ -234,7 +235,7 @@ export async function linkExistingPartner(personId: string, partnerId: string, u
 
 export async function linkExistingChild(personId: string, childId: string, pedigree: PedigreeType = 'birth'): Promise<void> {
   if (personId === childId) {
-    throw new Error('Нельзя сделать человека своим ребёнком');
+    throw new Error(localizedError('errors.cannotSelfChild'));
   }
   const familyId = await getOrCreateFamilyForNewChild(personId);
   await linkChildToFamily(familyId, childId, pedigree);
@@ -242,13 +243,13 @@ export async function linkExistingChild(personId: string, childId: string, pedig
 
 export async function linkExistingParent(personId: string, parentId: string, pedigree: PedigreeType = 'birth'): Promise<void> {
   if (personId === parentId) {
-    throw new Error('Нельзя сделать человека своим родителем');
+    throw new Error(localizedError('errors.cannotSelfParent'));
   }
   const families = await getFamiliesForPerson(personId);
   const asChild = families.find((f) => f.children.some((c) => c.person.id === personId));
   if (asChild) {
     if (asChild.partners.some((p) => p.id === parentId)) {
-      throw new Error('Этот человек уже указан как родитель');
+      throw new Error(localizedError('errors.alreadyParent'));
     }
     await linkPartner(asChild.id, parentId, asChild.partners.length);
     return;
@@ -261,7 +262,7 @@ export async function linkExistingParent(personId: string, parentId: string, ped
 export async function linkPartnerToFamily(familyId: string, personId: string): Promise<void> {
   const families = await getFamiliesForPerson(personId);
   if (families.some((f) => f.id === familyId && f.partners.some((p) => p.id === personId))) {
-    throw new Error('Человек уже в этом союзе');
+    throw new Error(localizedError('errors.alreadyInUnion'));
   }
   await linkPartner(familyId, personId, 1);
 }
@@ -273,7 +274,7 @@ export async function linkChildToFamily(familyId: string, childId: string, pedig
     .from(schema.familyChildren)
     .where(and(eq(schema.familyChildren.familyId, familyId), eq(schema.familyChildren.personId, childId), isNull(schema.familyChildren.deletedAt)));
   if (existing) {
-    throw new Error('Этот человек уже указан как ребёнок в союзе');
+    throw new Error(localizedError('errors.alreadyChildInUnion'));
   }
   await linkChild(familyId, childId, pedigree);
 }
@@ -285,7 +286,7 @@ export async function unlinkPartner(familyId: string, personId: string): Promise
     .from(schema.familyPartners)
     .where(and(eq(schema.familyPartners.familyId, familyId), eq(schema.familyPartners.personId, personId), isNull(schema.familyPartners.deletedAt)));
   if (!link) {
-    throw new Error('Семейная связь не найдена');
+    throw new Error(localizedError('errors.familyLinkNotFound'));
   }
 
   const ts = nowIso();
@@ -300,7 +301,7 @@ export async function unlinkChild(familyId: string, personId: string): Promise<v
     .from(schema.familyChildren)
     .where(and(eq(schema.familyChildren.familyId, familyId), eq(schema.familyChildren.personId, personId), isNull(schema.familyChildren.deletedAt)));
   if (!link) {
-    throw new Error('Семейная связь не найдена');
+    throw new Error(localizedError('errors.familyLinkNotFound'));
   }
 
   const ts = nowIso();
@@ -355,11 +356,11 @@ export async function dissolveUnion(familyId: string, personId: string): Promise
     .from(schema.familyPartners)
     .where(and(eq(schema.familyPartners.familyId, familyId), eq(schema.familyPartners.personId, personId), isNull(schema.familyPartners.deletedAt)));
   if (!membership) {
-    throw new Error('Человек не состоит в этом союзе');
+    throw new Error(localizedError('errors.notInUnion'));
   }
 
   if ((await countActiveFamilyChildren(familyId)) > 0) {
-    throw new Error('Нельзя удалить союз, в котором есть дети');
+    throw new Error(localizedError('errors.cannotDissolveWithChildren'));
   }
 
   const childRows = await db

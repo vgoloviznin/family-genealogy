@@ -2,6 +2,8 @@ import type { BatchMergeApplyResult, BatchMergePreviewResult, MergeApplyResult, 
 
 export type { BatchMergeApplyResult, BatchMergePreviewResult, MergeApplyResult, MergeConflictResolution, MergePreviewResult } from './merge-types';
 
+export type AppLocale = 'ru' | 'en' | 'it';
+
 export const IPC_CHANNELS = {
   PROJECT_CREATE: 'project:create',
   PROJECT_OPEN: 'project:open',
@@ -278,6 +280,7 @@ export interface RecentProject {
 export interface AppSettings {
   deviceId: string;
   editorLabel: string;
+  locale: AppLocale;
   backupFolder?: string;
   backupOnQuit: boolean;
   backupKeepCount: number;
@@ -366,7 +369,7 @@ export type UndoAction =
 
 export interface Api {
   project: {
-    create: (name: string) => Promise<ProjectMeta>;
+    create: (name: string) => Promise<ProjectMeta | null>;
     open: () => Promise<ProjectMeta | null>;
     openPath: (path: string) => Promise<ProjectMeta>;
     close: () => Promise<void>;

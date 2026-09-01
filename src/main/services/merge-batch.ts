@@ -17,8 +17,7 @@ import type {
   MergeConflictResolution,
   MergeTableStats
 } from '@shared/merge-types';
-
-const PREVIEW_NOTE = 'Для оценки следующих архивов неразрешённые конфликты временно считались как „из архива“.';
+import { getAppLocale, localizedError, t } from '../i18n';
 
 function emptyStats(): MergeTableStats {
   return { inserted: 0, keptLocal: 0, tookRemote: 0, conflicts: 0 };
@@ -50,7 +49,7 @@ function copyProjectSnapshot(sourcePath: string): string {
   const dest = mkdtempSync(join(tmpdir(), 'fgtree-batch-master-'));
   copyFileSync(join(sourcePath, 'project.json'), join(dest, 'project.json'));
   if (!existsSync(sourceDb)) {
-    throw new Error('В проекте нет family.sqlite');
+    throw new Error(localizedError('errors.projectNoDb'));
   }
   copyFileSync(sourceDb, join(dest, 'family.sqlite'));
 
@@ -76,12 +75,12 @@ export async function sortArchivePaths(archivePaths: string[]): Promise<string[]
   const metas: ArchiveSortMeta[] = [];
   for (const archivePath of archivePaths) {
     if (!existsSync(archivePath)) {
-      throw new Error(`Файл архива не найден: ${archivePath}`);
+      throw new Error(localizedError('errors.archiveFileNotFound', { path: archivePath }));
     }
     let tempDir: string | null = null;
     try {
       tempDir = await extractArchiveToTemp(archivePath);
-      const manifest = readPackManifest(join(tempDir, 'manifest.json'));
+      const manifest = readPackManifest(join(tempDir, 'manifest.json'), getAppLocale());
       metas.push({
         archivePath,
         exportedAt: manifest.exportedAt ?? null,
@@ -121,7 +120,7 @@ export async function sortArchivePaths(archivePaths: string[]): Promise<string[]
 export async function previewBatchSync(archivePaths: string[]): Promise<BatchMergePreviewResult> {
   const project = requireProject();
   if (archivePaths.length === 0) {
-    throw new Error('Не выбраны архивы');
+    throw new Error(localizedError('errors.archivesNotSelected'));
   }
 
   const sorted = await sortArchivePaths(archivePaths);
@@ -139,12 +138,12 @@ export async function previewBatchSync(archivePaths: string[]): Promise<BatchMer
           phase: 'merge',
           current: i,
           total: sorted.length,
-          message: `Сравнение архива ${i + 1} из ${sorted.length}…`
+          message: t(getAppLocale(), 'progress.comparingArchive', { current: i + 1, total: sorted.length })
         });
         tempIncoming = await extractArchiveToTemp(archivePath);
         const manifest = await verifyExtractedArchive(tempIncoming);
         if (manifest.projectId !== project.projectId) {
-          throw new Error('Это архив другого проекта');
+          throw new Error(localizedError('errors.wrongProjectArchive'));
         }
 
         const preview = await mergeIncomingDatabase({
@@ -153,7 +152,7 @@ export async function previewBatchSync(archivePaths: string[]): Promise<BatchMer
           incomingProjectPath: tempIncoming
         });
         if ('applied' in preview) {
-          throw new Error('Ожидался preview, получен apply');
+          throw new Error(localizedError('errors.expectedPreviewGotApply'));
         }
 
         for (const conflict of preview.conflicts) {
@@ -194,7 +193,7 @@ export async function previewBatchSync(archivePaths: string[]): Promise<BatchMer
       phase: 'merge',
       current: sorted.length,
       total: sorted.length,
-      message: 'Готово'
+      message: t(getAppLocale(), 'progress.done')
     });
 
     const allConflicts = [...allConflictsMap.values()];
@@ -203,7 +202,7 @@ export async function previewBatchSync(archivePaths: string[]): Promise<BatchMer
       archives,
       allConflicts,
       unresolvedConflicts: allConflicts.length,
-      previewNote: PREVIEW_NOTE,
+      previewNoteKey: 'mergeBatchPreviewNote',
       totalStats
     };
   } finally {
@@ -218,13 +217,13 @@ export async function previewBatchSync(archivePaths: string[]): Promise<BatchMer
 export async function applyBatchSync(archivePaths: string[], resolutions: MergeConflictResolution[]): Promise<BatchMergeApplyResult> {
   requireProject();
   if (archivePaths.length === 0) {
-    throw new Error('Не выбраны архивы');
+    throw new Error(localizedError('errors.archivesNotSelected'));
   }
 
   const sorted = await sortArchivePaths(archivePaths);
   const backupPath = await backupProject();
   if (!backupPath) {
-    throw new Error('Не удалось создать резервную копию');
+    throw new Error(localizedError('errors.backupFailed'));
   }
 
   const archiveResults: MergeApplyResult[] = [];
@@ -239,7 +238,7 @@ export async function applyBatchSync(archivePaths: string[], resolutions: MergeC
         phase: 'merge',
         current: i,
         total: sorted.length,
-        message: `Слияние архива ${i + 1} из ${sorted.length}…`
+        message: t(getAppLocale(), 'progress.mergingArchive', { current: i + 1, total: sorted.length })
       });
       const result = await applySyncFromArchivePath(sorted[i], resolutions, {
         createBackup: false,
@@ -257,7 +256,7 @@ export async function applyBatchSync(archivePaths: string[], resolutions: MergeC
       phase: 'merge',
       current: sorted.length,
       total: sorted.length,
-      message: 'Готово'
+      message: t(getAppLocale(), 'progress.done')
     });
   } finally {
     clearUndo();

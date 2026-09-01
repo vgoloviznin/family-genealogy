@@ -189,11 +189,11 @@ export function useProjectSession(showToast: (message: string, variant?: 'info' 
     async (name: string) => {
       try {
         const meta = await window.api.project.create(name);
-        await loadProject(meta);
-      } catch (e) {
-        if ((e as Error).message !== 'Cancelled') {
-          showToast((e as Error).message, 'error');
+        if (meta) {
+          await loadProject(meta);
         }
+      } catch (e) {
+        showToast((e as Error).message, 'error');
       }
     },
     [loadProject, showToast]
@@ -224,16 +224,16 @@ export function useProjectSession(showToast: (message: string, variant?: 'info' 
   const handleExport = useCallback(async () => {
     const path = await window.api.pack.export();
     if (path) {
-      showToast(`Экспорт: ${path}`, 'info', 4000);
+      showToast(t('toast.exportDone', { path }), 'info', 4000);
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   const handleBackup = useCallback(async () => {
     const path = await window.api.pack.backup();
     if (path) {
-      showToast(`Бэкап: ${path}`, 'info', 4000);
+      showToast(t('toast.backupDone', { path }), 'info', 4000);
     }
-  }, [showToast]);
+  }, [showToast, t]);
 
   const handleRestore = useCallback(async () => {
     const meta = await window.api.pack.restore();

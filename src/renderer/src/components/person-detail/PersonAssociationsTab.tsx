@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PersonDetail, CreateAssociationInput, Person } from '@shared/types';
-import { personLabel, ASSOCIATION_LABELS } from '../../lib/labels';
+import { personLabel, ASSOCIATION_CODES, associationLabel } from '../../lib/labels';
 import { ActionBtn, DangerBtn, EmptyState } from './ui';
 
 interface Props {
@@ -45,7 +45,7 @@ export function PersonAssociationsTab({ person, otherPeople, onSelectPerson, onR
       ) : (
         <div className="border rounded-lg p-3 space-y-2 bg-stone-50">
           <label className="block text-sm">
-            Человек
+            {t('personDetail.personLabel')}
             <select className="w-full border rounded px-2 py-1 mt-1" value={assocPersonId} onChange={(e) => setAssocPersonId(e.target.value)}>
               {otherPeople.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -55,22 +55,22 @@ export function PersonAssociationsTab({ person, otherPeople, onSelectPerson, onR
             </select>
           </label>
           <label className="block text-sm">
-            Роль
+            {t('role')}
             <select
               className="w-full border rounded px-2 py-1 mt-1"
               value={assocRole}
               onChange={(e) => setAssocRole(e.target.value as CreateAssociationInput['role'])}
             >
-              {Object.entries(ASSOCIATION_LABELS).map(([k, v]) => (
+              {ASSOCIATION_CODES.map((k) => (
                 <option key={k} value={k}>
-                  {v}
+                  {associationLabel(k)}
                 </option>
               ))}
             </select>
           </label>
           <div className="flex gap-2">
             <button className="text-sm bg-stone-800 text-white px-3 py-1 rounded-lg" onClick={() => void addAssociation()}>
-              Добавить
+              {t('personDetail.add')}
             </button>
             <button className="text-sm border rounded-lg px-3 py-1" onClick={() => setShowAssociationForm(false)}>
               {t('cancel')}
@@ -78,15 +78,15 @@ export function PersonAssociationsTab({ person, otherPeople, onSelectPerson, onR
           </div>
         </div>
       )}
-      {otherPeople.length === 0 && !showAssociationForm && <EmptyState text="Добавьте ещё людей в проект, чтобы создать ассоциации." />}
+      {otherPeople.length === 0 && !showAssociationForm && <EmptyState text={t('personDetail.emptyAssociationsNeedPeople')} />}
       {person.associations.length === 0 && otherPeople.length > 0 && !showAssociationForm ? (
-        <EmptyState text="Ассоциации (крёстные, свидетели и др.) пока не добавлены." />
+        <EmptyState text={t('personDetail.emptyAssociations')} />
       ) : person.associations.length > 0 ? (
         <ul className="space-y-2">
           {person.associations.map((a) => (
             <li key={a.id} className="border border-stone-300 rounded-lg p-2.5 text-sm flex justify-between gap-2 bg-stone-50 items-center">
               <span>
-                <span className="text-xs font-medium text-stone-500">{ASSOCIATION_LABELS[a.role] ?? a.customRole}</span>
+                <span className="text-xs font-medium text-stone-500">{associationLabel(a.role) || a.customRole}</span>
                 {': '}
                 <button className="font-semibold text-stone-900 hover:underline" onClick={() => onSelectPerson(a.toPerson.id)}>
                   {personLabel(a.toPerson)}

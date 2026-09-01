@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { PartialDate, DatePrecision } from '@shared/types';
 import { datePartsVisibility, trimPartialDateForPrecision } from '@shared/partial-date';
 
@@ -7,20 +9,15 @@ interface Props {
   label?: string;
 }
 
-const precisions: { value: DatePrecision; label: string }[] = [
-  { value: 'unknown', label: 'Неизвестно' },
-  { value: 'year', label: 'Только год' },
-  { value: 'month', label: 'Год и месяц' },
-  { value: 'exact', label: 'Точная дата' },
-  { value: 'circa', label: 'Около' },
-  { value: 'before', label: 'До' },
-  { value: 'after', label: 'После' }
-];
+const PRECISION_CODES: DatePrecision[] = ['unknown', 'year', 'month', 'exact', 'circa', 'before', 'after'];
 
 export function DateFields({ value, onChange, label }: Props) {
+  const { t, i18n } = useTranslation();
   const parts = datePartsVisibility(value.precision);
   const showNumeric = parts.day || parts.month || parts.year;
   const colCount = [parts.day, parts.month, parts.year].filter(Boolean).length;
+
+  const precisions = useMemo(() => PRECISION_CODES.map((code) => ({ value: code, label: t(`dateField.precision.${code}`) })), [t, i18n.language]);
 
   return (
     <div className="space-y-2">
@@ -41,7 +38,7 @@ export function DateFields({ value, onChange, label }: Props) {
           {parts.day && (
             <input
               type="number"
-              placeholder="День"
+              placeholder={t('dateField.dayPlaceholder')}
               className="border border-stone-300 rounded px-2 py-1 text-sm"
               value={value.day ?? ''}
               onChange={(e) => onChange({ ...value, day: e.target.value ? Number(e.target.value) : null })}
@@ -50,7 +47,7 @@ export function DateFields({ value, onChange, label }: Props) {
           {parts.month && (
             <input
               type="number"
-              placeholder="Месяц"
+              placeholder={t('dateField.monthPlaceholder')}
               className="border border-stone-300 rounded px-2 py-1 text-sm"
               value={value.month ?? ''}
               onChange={(e) => onChange({ ...value, month: e.target.value ? Number(e.target.value) : null })}
@@ -59,7 +56,7 @@ export function DateFields({ value, onChange, label }: Props) {
           {parts.year && (
             <input
               type="number"
-              placeholder="Год"
+              placeholder={t('dateField.yearPlaceholder')}
               className="border border-stone-300 rounded px-2 py-1 text-sm"
               value={value.year ?? ''}
               onChange={(e) => onChange({ ...value, year: e.target.value ? Number(e.target.value) : null })}
@@ -68,7 +65,7 @@ export function DateFields({ value, onChange, label }: Props) {
         </div>
       )}
       <input
-        placeholder="Или текстом: ок. 1890"
+        placeholder={t('dateField.orTextPlaceholder')}
         className="w-full border border-stone-300 rounded px-2 py-1 text-sm"
         value={value.originalText ?? ''}
         onChange={(e) => onChange({ ...value, originalText: e.target.value || null })}

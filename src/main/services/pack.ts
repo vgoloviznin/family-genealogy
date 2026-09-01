@@ -20,6 +20,15 @@ import type {
   MergePreviewResult
 } from '@shared/merge-types';
 import type { PackProgress, ProjectMeta } from '@shared/types';
+import { localizedError, t, getAppLocale } from '../i18n';
+
+function localizedProgress(key: string, params?: Record<string, string | number>): string {
+  return t(getAppLocale(), key, params);
+}
+
+function fgtreeDialogFilter() {
+  return [{ name: t(getAppLocale(), 'dialog.fgtreeFilter'), extensions: ['fgtree'] }];
+}
 
 const FORMAT = FGTREE_FORMAT;
 const FORMAT_VERSION = 1;
@@ -85,7 +94,7 @@ async function buildManifest(projectPath: string, kind: 'export' | 'backup'): Pr
 /** Unpack .fgtree into a fresh temp dir (does not open as current project). */
 export async function extractArchiveToTemp(archivePath: string): Promise<string> {
   const tempDir = mkdtempSync(join(tmpdir(), 'fgtree-sync-'));
-  emitProgress({ phase: 'merge', current: 0, total: 100, message: 'Распаковка архива…' });
+  emitProgress({ phase: 'merge', current: 0, total: 100, message: localizedProgress('progress.unpackingArchive') });
   await extractZip(archivePath, { dir: tempDir });
   return tempDir;
 }
@@ -93,15 +102,15 @@ export async function extractArchiveToTemp(archivePath: string): Promise<string>
 export async function verifyExtractedArchive(tempDir: string): Promise<ReturnType<typeof readPackManifest>> {
   const manifestPath = join(tempDir, 'manifest.json');
   if (!existsSync(manifestPath)) {
-    throw new Error('Неверный файл: нет manifest.json');
+    throw new Error(localizedError('errors.invalidArchiveNoManifest'));
   }
-  const manifest = readPackManifest(manifestPath);
+  const manifest = readPackManifest(manifestPath, getAppLocale());
   const dbPath = join(tempDir, 'family.sqlite');
   if (!existsSync(dbPath)) {
-    throw new Error('В архиве нет family.sqlite');
+    throw new Error(localizedError('errors.invalidArchiveNoDb'));
   }
-  emitProgress({ phase: 'merge', current: 30, total: 100, message: 'Проверка архива…' });
-  await verifyPackDatabaseHash(manifest, dbPath, sha256File);
+  emitProgress({ phase: 'merge', current: 30, total: 100, message: localizedProgress('progress.checkingArchive') });
+  await verifyPackDatabaseHash(manifest, dbPath, sha256File, getAppLocale());
   return manifest;
 }
 
@@ -120,7 +129,7 @@ export async function packProjectArchive(projectPath: string, outputPath: string
         phase: 'pack',
         current: p.fs.processedBytes ?? 0,
         total: p.fs.totalBytes ?? 0,
-        message: 'Упаковка проекта…'
+        message: localizedProgress('progress.packingProject')
       });
     });
     archive.pipe(output);
@@ -142,21 +151,21 @@ export async function packProjectArchive(projectPath: string, outputPath: string
 export async function unpackProjectArchive(archivePath: string, destPath: string): Promise<ProjectMeta> {
   const entries = existsSync(destPath) ? readdirSync(destPath).filter((e) => !e.startsWith('.')) : [];
   if (entries.length > 0) {
-    throw new Error('Папка назначения не пуста');
+    throw new Error(localizedError('errors.destinationNotEmpty'));
   }
 
   mkdirSync(destPath, { recursive: true });
-  emitProgress({ phase: 'unpack', current: 0, total: 100, message: 'Распаковка…' });
+  emitProgress({ phase: 'unpack', current: 0, total: 100, message: localizedProgress('progress.unpacking') });
   await extractZip(archivePath, { dir: destPath });
 
   const manifestPath = join(destPath, 'manifest.json');
   if (!existsSync(manifestPath)) {
-    throw new Error('Неверный файл: нет manifest.json');
+    throw new Error(localizedError('errors.invalidArchiveNoManifest'));
   }
-  const manifest = readPackManifest(manifestPath);
+  const manifest = readPackManifest(manifestPath, getAppLocale());
 
   const dbPath = join(destPath, 'family.sqlite');
-  await verifyPackDatabaseHash(manifest, dbPath, sha256File);
+  await verifyPackDatabaseHash(manifest, dbPath, sha256File, getAppLocale());
 
   closeProject();
   return openProjectAtPath(destPath);
@@ -180,9 +189,9 @@ function rotateBackups(backupFolder: string, projectName: string, keep: number):
 export async function exportProject(): Promise<string | null> {
   const project = requireProject();
   const result = await dialog.showSaveDialog({
-    title: 'Экспорт проекта',
+    title: t(getAppLocale(), 'dialog.exportProject'),
     defaultPath: `${project.name}.fgtree`,
-    filters: [{ name: 'Family Geneology', extensions: ['fgtree'] }]
+    filters: fgtreeDialogFilter()
   });
   if (result.canceled || !result.filePath) {
     return null;
@@ -192,8 +201,8 @@ export async function exportProject(): Promise<string | null> {
 
 export async function importProject(): Promise<ProjectMeta | null> {
   const fileResult = await dialog.showOpenDialog({
-    title: 'Импорт проекта',
-    filters: [{ name: 'Family Geneology', extensions: ['fgtree'] }],
+    title: t(getAppLocale(), 'dialog.importProject'),
+    filters: fgtreeDialogFilter(),
     properties: ['openFile']
   });
   if (fileResult.canceled || !fileResult.filePaths[0]) {
@@ -201,7 +210,7 @@ export async function importProject(): Promise<ProjectMeta | null> {
   }
 
   const folderResult = await dialog.showOpenDialog({
-    title: 'Папка для развёртывания проекта',
+    title: t(getAppLocale(), 'dialog.deployFolder'),
     properties: ['openDirectory', 'createDirectory']
   });
   if (folderResult.canceled || !folderResult.filePaths[0]) {
@@ -226,8 +235,8 @@ export async function backupProject(): Promise<string | null> {
 
 export async function restoreProject(): Promise<ProjectMeta | null> {
   const fileResult = await dialog.showOpenDialog({
-    title: 'Восстановить из архива',
-    filters: [{ name: 'Family Geneology', extensions: ['fgtree'] }],
+    title: t(getAppLocale(), 'dialog.restoreArchive'),
+    filters: fgtreeDialogFilter(),
     properties: ['openFile']
   });
   if (fileResult.canceled || !fileResult.filePaths[0]) {
@@ -235,7 +244,7 @@ export async function restoreProject(): Promise<ProjectMeta | null> {
   }
 
   const folderResult = await dialog.showOpenDialog({
-    title: 'Папка для восстановления',
+    title: t(getAppLocale(), 'dialog.restoreFolder'),
     properties: ['openDirectory', 'createDirectory']
   });
   if (folderResult.canceled || !folderResult.filePaths[0]) {
@@ -260,7 +269,7 @@ export async function backupOnQuitIfEnabled(): Promise<void> {
 
 export async function handleOpenFgtreeFile(filePath: string): Promise<ProjectMeta | null> {
   const folderResult = await dialog.showOpenDialog({
-    title: 'Папка для развёртывания проекта',
+    title: t(getAppLocale(), 'dialog.deployFolder'),
     properties: ['openDirectory', 'createDirectory']
   });
   if (folderResult.canceled || !folderResult.filePaths[0]) {
@@ -272,22 +281,22 @@ export async function handleOpenFgtreeFile(filePath: string): Promise<ProjectMet
 export async function previewSyncFromArchivePath(archivePath: string): Promise<MergePreviewResult> {
   const project = requireProject();
   if (!existsSync(archivePath)) {
-    throw new Error('Файл архива не найден');
+    throw new Error(localizedError('errors.archiveNotFound'));
   }
 
   let tempDir: string | null = null;
   try {
     tempDir = await extractArchiveToTemp(archivePath);
     await verifyExtractedArchive(tempDir);
-    emitProgress({ phase: 'merge', current: 60, total: 100, message: 'Сравнение изменений…' });
+    emitProgress({ phase: 'merge', current: 60, total: 100, message: localizedProgress('progress.comparingChanges') });
     const result = await mergeIncomingDatabase({
       mode: 'preview',
       localProjectPath: project.path,
       incomingProjectPath: tempDir
     });
-    emitProgress({ phase: 'merge', current: 100, total: 100, message: 'Готово' });
+    emitProgress({ phase: 'merge', current: 100, total: 100, message: localizedProgress('progress.done') });
     if ('applied' in result) {
-      throw new Error('Ожидался preview, получен apply');
+      throw new Error(localizedError('errors.expectedPreviewGotApply'));
     }
     return { ...result, archivePath };
   } finally {
@@ -313,7 +322,7 @@ export async function applySyncFromArchivePath(
 ): Promise<MergeApplyResult> {
   const project = requireProject();
   if (!existsSync(archivePath)) {
-    throw new Error('Файл архива не найден');
+    throw new Error(localizedError('errors.archiveNotFound'));
   }
 
   const createBackup = options.createBackup !== false;
@@ -324,18 +333,18 @@ export async function applySyncFromArchivePath(
     tempDir = await extractArchiveToTemp(archivePath);
     const manifest = await verifyExtractedArchive(tempDir);
     if (manifest.projectId !== project.projectId) {
-      throw new Error('Это архив другого проекта');
+      throw new Error(localizedError('errors.wrongProjectArchive'));
     }
 
     let backupPath = options.backupPath ?? null;
     if (createBackup) {
       backupPath = await backupProject();
       if (!backupPath) {
-        throw new Error('Не удалось создать резервную копию');
+        throw new Error(localizedError('errors.backupFailed'));
       }
     }
 
-    emitProgress({ phase: 'merge', current: 60, total: 100, message: 'Слияние данных…' });
+    emitProgress({ phase: 'merge', current: 60, total: 100, message: localizedProgress('progress.mergingData') });
     const result = await mergeIncomingDatabase({
       mode: 'apply',
       localProjectPath: project.path,
@@ -346,7 +355,7 @@ export async function applySyncFromArchivePath(
     if (clearUndoAfter) {
       clearUndo();
     }
-    emitProgress({ phase: 'merge', current: 100, total: 100, message: 'Готово' });
+    emitProgress({ phase: 'merge', current: 100, total: 100, message: localizedProgress('progress.done') });
     return result as MergeApplyResult;
   } finally {
     if (tempDir) {
@@ -358,8 +367,8 @@ export async function applySyncFromArchivePath(
 export async function previewSyncFromArchive(): Promise<MergePreviewResult | null> {
   requireProject();
   const fileResult = await dialog.showOpenDialog({
-    title: 'Синхронизация из архива',
-    filters: [{ name: 'Family Geneology', extensions: ['fgtree'] }],
+    title: t(getAppLocale(), 'dialog.syncFromArchive'),
+    filters: fgtreeDialogFilter(),
     properties: ['openFile']
   });
   if (fileResult.canceled || !fileResult.filePaths[0]) {
@@ -376,8 +385,8 @@ export async function applySyncFromArchive(archivePath: string, resolutions: Mer
 export async function previewSyncFromArchives(): Promise<BatchMergePreviewResult | null> {
   requireProject();
   const fileResult = await dialog.showOpenDialog({
-    title: 'Синхронизация нескольких архивов',
-    filters: [{ name: 'Family Geneology', extensions: ['fgtree'] }],
+    title: t(getAppLocale(), 'dialog.syncBatch'),
+    filters: fgtreeDialogFilter(),
     properties: ['openFile', 'multiSelections']
   });
   if (fileResult.canceled || fileResult.filePaths.length === 0) {

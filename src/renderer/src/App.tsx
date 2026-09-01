@@ -8,16 +8,19 @@ import { MergeConflictDialog } from './components/MergeConflictDialog';
 import { MergeReportDialog } from './components/MergeReportDialog';
 import { SyncHelpDialog } from './components/SyncHelpDialog';
 import { SettingsModal } from './components/SettingsModal';
+import { LocaleSelect } from './components/LocaleSelect';
 import { PromptDialog } from './components/PromptDialog';
 import { Toast } from './components/Toast';
 import { personLabel, formatLifeSpan } from './lib/labels';
 import { useToast } from './hooks/useToast';
+import { useLocale } from './hooks/useLocale';
 import { useProjectSession, useMenuCommands } from './hooks/useProjectSession';
 import { useSyncFlow } from './hooks/useSyncFlow';
 import appIcon from './assets/icon.png';
 
 export default function App() {
   const { t } = useTranslation();
+  const { ready, locale, setLocale } = useLocale();
   const { toast, showToast } = useToast();
   const session = useProjectSession(showToast);
 
@@ -46,10 +49,22 @@ export default function App() {
     handleUndo: session.handleUndo
   });
 
+  if (!ready) {
+    return (
+      <div className="min-h-screen bg-[#f4f1eb] flex items-center justify-center" aria-busy="true">
+        <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-600 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   if (!session.project) {
     return (
       <>
         <WelcomeScreen
+          locale={locale}
+          onLocaleChange={(next) => {
+            void setLocale(next).then((s) => session.setSettings(s));
+          }}
           recents={session.recents}
           onCreate={(n) => void session.handleCreate(n)}
           onOpen={() => void session.handleOpen()}
@@ -80,6 +95,13 @@ export default function App() {
         <h1 className="font-serif text-lg text-stone-800">{t('appTitleWithProject', { name: project.name })}</h1>
         {project.cloudWarning && <span className="text-xs bg-amber-100 text-amber-900 px-2 py-1 rounded">{t('cloudWarning')}</span>}
         <div className="flex-1" />
+        <LocaleSelect
+          compact
+          value={locale}
+          onChange={(next) => {
+            void setLocale(next).then((s) => session.setSettings(s));
+          }}
+        />
         <button className="text-sm px-3 py-1 rounded border" onClick={() => void session.flushThen(() => session.setView('list'))}>
           {t('people')}
         </button>
@@ -205,6 +227,10 @@ export default function App() {
       {session.settingsOpen && session.settings && (
         <SettingsModal
           settings={session.settings}
+          locale={locale}
+          onLocaleChange={(next) => {
+            void setLocale(next).then((s) => session.setSettings(s));
+          }}
           projectName={project.name}
           onClose={() => session.setSettingsOpen(false)}
           onSave={async (partial, name) => {
@@ -239,7 +265,7 @@ export default function App() {
                 }
               : {
                   conflicts: sync.syncPreview.preview.allConflicts,
-                  previewNote: sync.syncPreview.preview.previewNote
+                  previewNoteKey: sync.syncPreview.preview.previewNoteKey
                 }
           }
           onCancel={() => sync.setSyncPreview(null)}

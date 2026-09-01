@@ -12,6 +12,7 @@ import * as settings from '../services/settings';
 import * as dialogs from '../services/dialogs';
 import * as undo from '../services/undo';
 import { isCloudSyncedPath } from '../utils/paths';
+import { applyAppLocale } from '../locale';
 
 function wrap<T extends unknown[], R>(fn: (...args: T) => Promise<R> | R) {
   return async (_event: Electron.IpcMainInvokeEvent, ...args: T): Promise<R> => {
@@ -278,7 +279,13 @@ export function registerIpcHandlers(): void {
   );
   ipcMain.handle(
     IPC_CHANNELS.SETTINGS_SET,
-    wrap((partial) => settings.updateSettings(partial))
+    wrap((partial) => {
+      const result = settings.updateSettings(partial);
+      if (partial.locale !== undefined) {
+        applyAppLocale(result.locale);
+      }
+      return result;
+    })
   );
   ipcMain.handle(
     IPC_CHANNELS.SETTINGS_PICK_FOLDER,

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Person, PersonDetail, UndoAction, UnionType, PedigreeType } from '@shared/types';
-import { personLabel, PEDIGREE_LABELS, UNION_TYPE_LABELS, spouseLabel, siblingLabel } from '../../lib/labels';
+import { personLabel, pedigreeLabel, unionTypeLabel, spouseLabel, siblingLabel, UNION_TYPE_CODES, PEDIGREE_CODES } from '../../lib/labels';
 import { ActionBtn, DangerBtn, EmptyState, GhostBtn, RelRow } from './ui';
 
 interface Props {
@@ -82,21 +82,21 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
   return (
     <>
       <div className="flex gap-2 flex-wrap">
-        <ActionBtn label="Новый супруг(а)" onClick={() => void addRelative('partner')} />
-        <ActionBtn label="Новый ребёнок" onClick={() => void addRelative('child')} />
-        <ActionBtn label="Новый родитель" onClick={() => void addRelative('parent')} />
-        <ActionBtn label="Новый брат/сестра" onClick={() => void addRelative('sibling')} />
-        <ActionBtn label="Связать существующего" onClick={() => setLinkKind(linkKind ? null : 'partner')} />
+        <ActionBtn label={t('personDetail.newPartner')} onClick={() => void addRelative('partner')} />
+        <ActionBtn label={t('personDetail.newChild')} onClick={() => void addRelative('child')} />
+        <ActionBtn label={t('personDetail.newParent')} onClick={() => void addRelative('parent')} />
+        <ActionBtn label={t('personDetail.newSibling')} onClick={() => void addRelative('sibling')} />
+        <ActionBtn label={t('personDetail.linkExisting')} onClick={() => setLinkKind(linkKind ? null : 'partner')} />
       </div>
       {linkKind && (
         <div className="border rounded-lg p-3 space-y-2 bg-stone-50">
           <div className="flex gap-2 flex-wrap">
             {(
               [
-                ['partner', 'Супруг(а)'],
-                ['child', 'Ребёнок'],
-                ['parent', 'Родитель'],
-                ['sibling', 'Брат/сестра']
+                ['partner', t('personDetail.linkKindPartner')],
+                ['child', t('personDetail.linkKindChild')],
+                ['parent', t('personDetail.linkKindParent')],
+                ['sibling', t('personDetail.linkKindSibling')]
               ] as const
             ).map(([k, label]) => (
               <button
@@ -109,7 +109,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
             ))}
           </div>
           <select className="w-full border rounded px-2 py-1 text-sm" value={linkPersonId} onChange={(e) => setLinkPersonId(e.target.value)}>
-            <option value="">Выберите человека…</option>
+            <option value="">{t('personDetail.selectPerson')}</option>
             {otherPeople
               .filter((p) => !linkedIds.has(p.id) || linkKind === 'parent')
               .map((p) => (
@@ -120,7 +120,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
           </select>
           <div className="flex gap-2">
             <button className="text-sm bg-stone-800 text-white px-3 py-1 rounded-lg" onClick={() => void linkExisting()}>
-              Связать
+              {t('personDetail.link')}
             </button>
             <button className="text-sm border rounded-lg px-3 py-1" onClick={() => setLinkKind(null)}>
               {t('cancel')}
@@ -129,7 +129,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
         </div>
       )}
       {person.families.length === 0 ? (
-        <EmptyState text="Семейные связи пока не добавлены." />
+        <EmptyState text={t('personDetail.emptyFamily')} />
       ) : (
         person.families.map((f) => {
           const isChildHere = f.children.some((c) => c.person.id === person.id);
@@ -141,9 +141,9 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
             <div key={f.id} className="border border-stone-300 rounded-xl p-3 space-y-3 bg-white shadow-sm">
               {isChildHere ? (
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="text-sm font-medium text-stone-700">Семья родителей</div>
+                  <div className="text-sm font-medium text-stone-700">{t('personDetail.parentsFamily')}</div>
                   <DangerBtn
-                    label="отвязать от семьи"
+                    label={t('personDetail.unlinkFromFamily')}
                     onClick={() =>
                       void runFamilyUnlink(
                         {
@@ -153,7 +153,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                           pedigree: selfChild?.pedigree ?? 'birth'
                         },
                         () => window.api.family.unlinkChild(f.id, person.id),
-                        'Связь с семьёй удалена'
+                        t('personDetail.familyLinkRemoved')
                       )
                     }
                   />
@@ -161,66 +161,71 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
               ) : (
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <label className="text-sm font-medium text-stone-700 flex items-center gap-2">
-                    Тип союза
+                    {t('personDetail.unionType')}
                     <select
                       className="border border-stone-300 rounded-md px-2 py-1 bg-stone-50 font-normal"
                       value={f.unionType}
                       onChange={(e) =>
-                        void runFamilyAction(() => window.api.family.setUnionType(f.id, e.target.value as UnionType), 'Тип союза обновлён')
+                        void runFamilyAction(
+                          () => window.api.family.setUnionType(f.id, e.target.value as UnionType),
+                          t('personDetail.unionTypeUpdated')
+                        )
                       }
                     >
-                      {Object.entries(UNION_TYPE_LABELS).map(([k, v]) => (
+                      {UNION_TYPE_CODES.map((k) => (
                         <option key={k} value={k}>
-                          {v}
+                          {unionTypeLabel(k)}
                         </option>
                       ))}
                     </select>
                   </label>
                   <div className="flex items-center gap-2 flex-wrap">
                     <DangerBtn
-                      label="отвязать себя"
+                      label={t('personDetail.unlinkSelf')}
                       onClick={() =>
                         void runFamilyUnlink(
                           { type: 'family-relink-partner', familyId: f.id, personId: person.id },
                           () => window.api.family.unlinkPartner(f.id, person.id),
-                          'Вы отвязаны от союза'
+                          t('personDetail.unlinkedFromUnion')
                         )
                       }
                     />
                     {f.children.length === 0 &&
                       (dissolvingFamilyId === f.id ? (
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-stone-600">Удалить союз?</span>
+                          <span className="text-xs text-stone-600">{t('personDetail.dissolveUnionConfirm')}</span>
                           <DangerBtn
-                            label="да"
+                            label={t('yes')}
                             onClick={() => {
-                              void runFamilyAction(() => window.api.family.dissolveUnion(f.id, person.id), 'Союз удалён').finally(() =>
-                                setDissolvingFamilyId(null)
+                              void runFamilyAction(() => window.api.family.dissolveUnion(f.id, person.id), t('personDetail.unionDissolved')).finally(
+                                () => setDissolvingFamilyId(null)
                               );
                             }}
                           />
-                          <GhostBtn label="нет" onClick={() => setDissolvingFamilyId(null)} />
+                          <GhostBtn label={t('no')} onClick={() => setDissolvingFamilyId(null)} />
                         </div>
                       ) : (
-                        <DangerBtn label="удалить союз" onClick={() => setDissolvingFamilyId(f.id)} />
+                        <DangerBtn label={t('personDetail.dissolveUnion')} onClick={() => setDissolvingFamilyId(f.id)} />
                       ))}
                   </div>
                 </div>
               )}
               <div className="space-y-1.5">
-                <div className="text-xs font-medium uppercase tracking-wide text-stone-500">{isChildHere ? 'Родители' : 'Супруги'}</div>
+                <div className="text-xs font-medium uppercase tracking-wide text-stone-500">
+                  {isChildHere ? t('personDetail.parents') : t('personDetail.spouses')}
+                </div>
                 {(isChildHere ? f.partners : spouses).length === 0 && <span className="text-sm text-stone-400">—</span>}
                 {(isChildHere ? f.partners : spouses).map((p) => (
                   <RelRow
                     key={p.id}
-                    role={isChildHere ? 'Родитель' : spouseLabel(p.sex)}
+                    role={isChildHere ? t('personDetail.parentRole') : spouseLabel(p.sex)}
                     person={p}
                     onOpen={() => onSelectPerson(p.id)}
                     onUnlink={() => {
                       void runFamilyUnlink(
                         { type: 'family-relink-partner', familyId: f.id, personId: p.id },
                         () => window.api.family.unlinkPartner(f.id, p.id),
-                        isChildHere ? 'Родитель отвязан' : 'Супруг(а) отвязан(а)'
+                        isChildHere ? t('personDetail.parentUnlinked') : t('personDetail.spouseUnlinked')
                       );
                     }}
                   />
@@ -237,7 +242,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                       void window.api.family.linkPartnerToFamily(f.id, id).then(onRefresh);
                     }}
                   >
-                    <option value="">{isChildHere ? '+ родитель' : '+ супруг / супруга'}</option>
+                    <option value="">{isChildHere ? t('personDetail.addParentOption') : t('personDetail.addSpouseOption')}</option>
                     {otherPeople
                       .filter((p) => !f.partners.some((x) => x.id === p.id))
                       .map((p) => (
@@ -250,7 +255,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
               </div>
               {isChildHere && (
                 <div className="space-y-1.5">
-                  <div className="text-xs font-medium uppercase tracking-wide text-stone-500">Братья и сёстры</div>
+                  <div className="text-xs font-medium uppercase tracking-wide text-stone-500">{t('personDetail.siblings')}</div>
                   {siblings.length === 0 && <span className="text-sm text-stone-400">—</span>}
                   {siblings.map(({ person: c, pedigree }) => (
                     <RelRow
@@ -264,9 +269,9 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                           value={pedigree}
                           onChange={(e) => void window.api.family.setPedigree(f.id, c.id, e.target.value as PedigreeType).then(onRefresh)}
                         >
-                          {Object.entries(PEDIGREE_LABELS).map(([k, v]) => (
+                          {PEDIGREE_CODES.map((k) => (
                             <option key={k} value={k}>
-                              {v}
+                              {pedigreeLabel(k)}
                             </option>
                           ))}
                         </select>
@@ -275,7 +280,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                         void runFamilyUnlink(
                           { type: 'family-relink-child', familyId: f.id, personId: c.id, pedigree },
                           () => window.api.family.unlinkChild(f.id, c.id),
-                          'Связь удалена'
+                          t('personDetail.linkRemoved')
                         );
                       }}
                     />
@@ -291,7 +296,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                       void window.api.family.linkChildToFamily(f.id, id).then(onRefresh);
                     }}
                   >
-                    <option value="">+ брат / сестра</option>
+                    <option value="">{t('personDetail.addSiblingOption')}</option>
                     {otherPeople
                       .filter((p) => !f.children.some((x) => x.person.id === p.id) && !f.partners.some((x) => x.id === p.id))
                       .map((p) => (
@@ -304,7 +309,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
               )}
               {!isChildHere && (
                 <div className="space-y-1.5">
-                  <div className="text-xs font-medium uppercase tracking-wide text-stone-500">Дети</div>
+                  <div className="text-xs font-medium uppercase tracking-wide text-stone-500">{t('personDetail.children')}</div>
                   {children.length === 0 && <span className="text-sm text-stone-400">—</span>}
                   {children.map(({ person: c, pedigree }) => (
                     <RelRow
@@ -317,9 +322,9 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                           value={pedigree}
                           onChange={(e) => void window.api.family.setPedigree(f.id, c.id, e.target.value as PedigreeType).then(onRefresh)}
                         >
-                          {Object.entries(PEDIGREE_LABELS).map(([k, v]) => (
+                          {PEDIGREE_CODES.map((k) => (
                             <option key={k} value={k}>
-                              {v}
+                              {pedigreeLabel(k)}
                             </option>
                           ))}
                         </select>
@@ -328,7 +333,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                         void runFamilyUnlink(
                           { type: 'family-relink-child', familyId: f.id, personId: c.id, pedigree },
                           () => window.api.family.unlinkChild(f.id, c.id),
-                          'Связь удалена'
+                          t('personDetail.linkRemoved')
                         );
                       }}
                     />
@@ -344,7 +349,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                       void window.api.family.linkChildToFamily(f.id, id).then(onRefresh);
                     }}
                   >
-                    <option value="">+ ребёнок в этот союз</option>
+                    <option value="">{t('personDetail.addChildToUnion')}</option>
                     {otherPeople
                       .filter((p) => !f.children.some((x) => x.person.id === p.id) && !f.partners.some((x) => x.id === p.id))
                       .map((p) => (

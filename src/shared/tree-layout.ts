@@ -20,7 +20,7 @@ export interface PersonNameLines {
   secondary: string | null;
 }
 
-export function compactNameLines(person: { firstName: string; lastName: string; middleName?: string | null }): PersonNameLines {
+export function compactNameLines(person: { firstName: string; lastName: string; middleName?: string | null }, emptyNameLabel = ''): PersonNameLines {
   const last = person.lastName.trim();
   const given = [person.firstName, person.middleName]
     .map((part) => part?.trim())
@@ -36,7 +36,7 @@ export function compactNameLines(person: { firstName: string; lastName: string; 
     return { primary: given, secondary: null };
   }
   const full = [last, person.firstName, person.middleName].filter(Boolean).join(' ').trim();
-  return { primary: full || 'Новый человек', secondary: null };
+  return { primary: full || emptyNameLabel, secondary: null };
 }
 
 export function estimatePedigreeCardWidth(lines: PersonNameLines): number {
@@ -47,11 +47,12 @@ export function estimatePedigreeCardWidth(lines: PersonNameLines): number {
 }
 
 export function buildPedigreeNodeWidths(
-  people: Array<{ id: string; firstName: string; lastName: string; middleName?: string | null }>
+  people: Array<{ id: string; firstName: string; lastName: string; middleName?: string | null }>,
+  emptyNameLabel = ''
 ): Map<string, number> {
   const widths = new Map<string, number>();
   for (const person of people) {
-    widths.set(person.id, estimatePedigreeCardWidth(compactNameLines(person)));
+    widths.set(person.id, estimatePedigreeCardWidth(compactNameLines(person, emptyNameLabel)));
   }
   return widths;
 }

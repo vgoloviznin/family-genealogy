@@ -19,6 +19,7 @@ import {
   unlinkChild,
   unlinkPartner
 } from '@main/services/family';
+import { localizedErrorMessage } from '../../helpers/localized-error';
 
 vi.mock('@main/services/settings', () => ({
   getDeviceMeta: () => ({ deviceId: 'test-device', label: 'tester' }),
@@ -96,8 +97,8 @@ describe.skipIf(!isSqliteAvailable())('family service', () => {
     const project = createTestProjectDir();
     try {
       const person = await createPerson({ firstName: 'Solo', lastName: 'Person' });
-      await expect(linkExistingPartner(person.id, person.id)).rejects.toThrow('с самим собой');
-      await expect(linkExistingSibling(person.id, person.id)).rejects.toThrow('своим братом или сестрой');
+      await expect(linkExistingPartner(person.id, person.id)).rejects.toThrow(localizedErrorMessage('errors.cannotLinkSelf'));
+      await expect(linkExistingSibling(person.id, person.id)).rejects.toThrow(localizedErrorMessage('errors.cannotSelfSibling'));
     } finally {
       project.cleanup();
     }
@@ -109,7 +110,7 @@ describe.skipIf(!isSqliteAvailable())('family service', () => {
       const person = await createPerson({ firstName: 'One', lastName: 'Person' });
       const partner = await createPerson({ firstName: 'Two', lastName: 'Person' });
       await linkExistingPartner(person.id, partner.id);
-      await expect(linkExistingPartner(person.id, partner.id)).rejects.toThrow('уже супруги');
+      await expect(linkExistingPartner(person.id, partner.id)).rejects.toThrow(localizedErrorMessage('errors.alreadySpouses'));
     } finally {
       project.cleanup();
     }
@@ -170,7 +171,7 @@ describe.skipIf(!isSqliteAvailable())('family service', () => {
       const familyId = (await getFamiliesForPerson(person.id))[0].id;
 
       await unlinkPartner(familyId, person.id);
-      await expect(unlinkPartner(familyId, person.id)).rejects.toThrow('не найдена');
+      await expect(unlinkPartner(familyId, person.id)).rejects.toThrow(localizedErrorMessage('errors.familyLinkNotFound'));
     } finally {
       project.cleanup();
     }

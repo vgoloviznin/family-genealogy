@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { MergeConflictResolution, MergePreviewResult } from '@shared/merge-types';
-import { getColumnLabel, getConflictFieldDiffs, getConflictRowLabel } from '@shared/merge-conflict-fields';
+import { getConflictFieldDiffs, getConflictRowLabel } from '@shared/merge-conflict-fields';
+import { mergeColumnLabel } from '../lib/labels';
 
-function formatFieldValue(value: unknown): string {
+function formatFieldValue(value: unknown, emptyLabel: string): string {
   if (value === null || value === undefined || value === '') {
-    return '—';
+    return emptyLabel;
   }
   if (typeof value === 'string') {
     return value;
@@ -21,12 +22,13 @@ export function MergeConflictDialog({
   preview: {
     conflicts: MergePreviewResult['conflicts'];
     archivePath?: string;
-    previewNote?: string;
+    previewNoteKey?: string;
   };
   onCancel: () => void;
   onApply: (resolutions: MergeConflictResolution[]) => void;
 }) {
   const { t } = useTranslation();
+  const emptyFieldLabel = t('dateField.empty');
   const [choices, setChoices] = useState<Record<string, 'local' | 'remote'>>(() => {
     const initial: Record<string, 'local' | 'remote'> = {};
     for (const conflict of preview.conflicts) {
@@ -56,8 +58,8 @@ export function MergeConflictDialog({
         <div>
           <h2 className="text-lg font-medium">{t('mergeConflictsTitle')}</h2>
           <p className="text-sm text-stone-500 mt-1">{t('mergeConflictsHint')}</p>
-          {preview.previewNote ? (
-            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-2">{preview.previewNote}</p>
+          {preview.previewNoteKey ? (
+            <p className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-2">{t(preview.previewNoteKey)}</p>
           ) : null}
         </div>
 
@@ -108,12 +110,12 @@ export function MergeConflictDialog({
                     <tbody>
                       {fields.map((field) => (
                         <tr key={field.column} className="border-b border-stone-100 align-top">
-                          <td className="py-1.5 pr-2 text-stone-600 whitespace-nowrap">{getColumnLabel(field.column)}</td>
+                          <td className="py-1.5 pr-2 text-stone-600 whitespace-nowrap">{mergeColumnLabel(field.column)}</td>
                           <td className={`py-1.5 px-2 break-all ${choices[key] === 'local' ? 'bg-stone-50 font-medium' : ''}`}>
-                            {formatFieldValue(field.local)}
+                            {formatFieldValue(field.local, emptyFieldLabel)}
                           </td>
                           <td className={`py-1.5 pl-2 break-all ${choices[key] === 'remote' ? 'bg-stone-50 font-medium' : ''}`}>
-                            {formatFieldValue(field.remote)}
+                            {formatFieldValue(field.remote, emptyFieldLabel)}
                           </td>
                         </tr>
                       ))}

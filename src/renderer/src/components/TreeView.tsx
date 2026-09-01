@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ReactFlow,
   Background,
@@ -12,6 +13,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import type { TreeData, Person, TreeFamily, TreeNode } from '@shared/types';
+import i18n from '../i18n';
 import {
   layoutPedigreeTree,
   buildFamilyConnectors,
@@ -54,8 +56,13 @@ function TreeAvatar({ person, size }: { person: Person; size: 'sm' | 'lg' }) {
   );
 }
 
+function personHasName(person: Person): boolean {
+  return [person.lastName, person.firstName, person.middleName].some((part) => part?.trim());
+}
+
 function CompactCard({ person, isFocus, isSelected }: { person: Person; isFocus: boolean; isSelected: boolean }) {
   const { primary, secondary } = compactNameLines(person);
+  const displayPrimary = personHasName(person) ? primary : personLabel(person);
   return (
     <div
       className={`w-full h-full px-2 py-1.5 bg-white rounded-lg text-left flex gap-2 items-center transition-colors ${
@@ -64,7 +71,7 @@ function CompactCard({ person, isFocus, isSelected }: { person: Person; isFocus:
     >
       <TreeAvatar person={person} size="sm" />
       <div className="min-w-0 flex-1">
-        <div className="text-[12px] font-medium leading-[1.15] text-stone-900 whitespace-nowrap">{primary}</div>
+        <div className="text-[12px] font-medium leading-[1.15] text-stone-900 whitespace-nowrap">{displayPrimary}</div>
         {secondary ? <div className="text-[11px] leading-[1.15] text-stone-800 whitespace-nowrap">{secondary}</div> : null}
         <div className="text-[10px] tabular-nums text-stone-500 leading-tight mt-0.5 whitespace-nowrap">{formatLifeSpan(person)}</div>
       </div>
@@ -124,7 +131,7 @@ function childCount(personId: string, families: TreeFamily[]): number {
 
 function relationHint(node: TreeNode, focusId: string | null, data: TreeData): string | null {
   const children = childCount(node.id, data.families);
-  const childPart = children > 0 ? `${children} ${children === 1 ? 'ребёнок' : children < 5 ? 'ребёнка' : 'детей'}` : null;
+  const childPart = children > 0 ? i18n.t('treeHint.childCount', { count: children }) : null;
 
   if (!focusId) {
     return childPart;
@@ -137,29 +144,29 @@ function relationHint(node: TreeNode, focusId: string | null, data: TreeData): s
     const isParent = data.edges.some((e) => e.kind === 'parent' && e.source === node.id && e.target === focusId);
     if (isParent) {
       if (node.person.sex === 'female') {
-        return childPart ? `Мать · ${childPart}` : 'Мать';
+        return childPart ? `${i18n.t('treeHint.mother')} · ${childPart}` : i18n.t('treeHint.mother');
       }
       if (node.person.sex === 'male') {
-        return childPart ? `Отец · ${childPart}` : 'Отец';
+        return childPart ? `${i18n.t('treeHint.father')} · ${childPart}` : i18n.t('treeHint.father');
       }
-      return childPart ? `Родитель · ${childPart}` : 'Родитель';
+      return childPart ? `${i18n.t('treeHint.parent')} · ${childPart}` : i18n.t('treeHint.parent');
     }
-    return childPart ? `Предок · ${childPart}` : 'Предок';
+    return childPart ? `${i18n.t('treeHint.ancestor')} · ${childPart}` : i18n.t('treeHint.ancestor');
   }
 
   if (node.type === 'descendant') {
     const isChild = data.edges.some((e) => e.kind === 'parent' && e.source === focusId && e.target === node.id);
     if (isChild) {
-      return childPart ? `Ребёнок · ${childPart}` : 'Ребёнок';
+      return childPart ? `${i18n.t('treeHint.child')} · ${childPart}` : i18n.t('treeHint.child');
     }
-    return childPart ? `Потомок · ${childPart}` : 'Потомок';
+    return childPart ? `${i18n.t('treeHint.descendant')} · ${childPart}` : i18n.t('treeHint.descendant');
   }
 
   const isPartner = data.edges.some(
     (e) => e.kind === 'partner' && ((e.source === focusId && e.target === node.id) || (e.target === focusId && e.source === node.id))
   );
   if (isPartner) {
-    return childPart ? `Супруг(а) · ${childPart}` : 'Супруг(а)';
+    return childPart ? `${i18n.t('treeHint.spouse')} · ${childPart}` : i18n.t('treeHint.spouse');
   }
 
   return childPart;
@@ -213,11 +220,17 @@ function FocusViewport({ focusId }: { focusId: string | null }) {
 }
 
 function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
+  const { i18n } = useTranslation();
+  const emptyNameLabel = i18n.t('enum.newPerson');
+
   const layout = useMemo(() => {
     const nodeIds = data.nodes.map((n) => n.id);
     const partnerPairs = extractPartnerPairs(data);
     const families = data.families ?? [];
-    const nodeWidths = buildPedigreeNodeWidths(data.nodes.map((n) => ({ id: n.id, ...n.person })));
+    const nodeWidths = buildPedigreeNodeWidths(
+      data.nodes.map((n) => ({ ...n.person, id: n.id })),
+      emptyNameLabel
+    );
 
     const layoutFocus =
       data.focusPersonId ??
@@ -276,7 +289,7 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
     });
 
     return { nodes, lineSegments };
-  }, [data, selectedId, onSelectPerson]);
+  }, [data, selectedId, onSelectPerson, emptyNameLabel, i18n.language]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layout.nodes);
   const [edges, , onEdgesChange] = useEdgesState([]);

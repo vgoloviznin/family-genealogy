@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   label?: string;
@@ -7,15 +8,16 @@ interface Props {
 }
 
 export function PlaceField({ label, value, onChange }: Props) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [hints, setHints] = useState<Array<{ id: string; name: string }>>([]);
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       void window.api.places.search(value).then(setHints);
     }, 200);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
   }, [value]);
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export function PlaceField({ label, value, onChange }: Props) {
   return (
     <div className="relative" ref={boxRef}>
       <label className="text-sm font-medium text-stone-700 block">
-        {label ?? 'Место'}
+        {label ?? t('place')}
         <input
           className="w-full border border-stone-300 rounded-md px-2 py-1.5 mt-1 bg-stone-50"
           value={value}

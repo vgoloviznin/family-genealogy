@@ -2,10 +2,12 @@ import { app } from 'electron';
 import Store from 'electron-store';
 import { v7 as uuidv7 } from 'uuid';
 import type { AppSettings } from '@shared/types';
+import { validateLocale } from '@shared/locales';
 
 const defaults: AppSettings = {
   deviceId: uuidv7(),
   editorLabel: '',
+  locale: 'ru',
   backupOnQuit: true,
   backupKeepCount: 10,
   recentProjects: []
@@ -30,6 +32,11 @@ export function getSettings(): AppSettings {
   if (!data.deviceId) {
     data.deviceId = uuidv7();
     s.set('deviceId', data.deviceId);
+  }
+  const locale = validateLocale(data.locale);
+  if (data.locale !== locale) {
+    s.set('locale', locale);
+    data.locale = locale;
   }
   return data;
 }

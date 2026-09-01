@@ -9,6 +9,7 @@ import * as schema from '../db/schema';
 import { newId, nowIso } from '../utils/id';
 import { getDeviceMeta } from './settings';
 import { requireProject } from './project';
+import { getAppLocale, t } from '../i18n';
 import type { MediaItem } from '@shared/types';
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
@@ -118,12 +119,13 @@ export async function addMedia(target: {
   multiple?: boolean;
 }): Promise<MediaItem[]> {
   const allowMultiple = target.multiple ?? !target.setPrimary;
+  const locale = getAppLocale();
   const result = await dialog.showOpenDialog({
-    title: target.imagesOnly ? 'Выбрать фото' : 'Добавить файлы',
+    title: target.imagesOnly ? t(locale, 'dialog.pickPhoto') : t(locale, 'dialog.addFiles'),
     properties: allowMultiple ? ['openFile', 'multiSelections'] : ['openFile'],
     filters: target.imagesOnly
-      ? [{ name: 'Изображения', extensions: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'] }]
-      : [{ name: 'Media', extensions: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'pdf', 'doc', 'docx'] }]
+      ? [{ name: t(locale, 'dialog.imagesFilter'), extensions: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'] }]
+      : [{ name: t(locale, 'dialog.allFilesFilter'), extensions: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'pdf', 'doc', 'docx'] }]
   });
   if (result.canceled || result.filePaths.length === 0) {
     return [];

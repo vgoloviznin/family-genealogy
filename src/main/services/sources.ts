@@ -3,6 +3,7 @@ import { getDatabase } from '../db/connection';
 import * as schema from '../db/schema';
 import { newId, nowIso } from '../utils/id';
 import { getDeviceMeta } from './settings';
+import { localizedError } from '../i18n';
 import type { CitationView, CreateCitationInput, CreateSourceInput, Source, SourceType } from '@shared/types';
 
 function mapSource(row: typeof schema.sources.$inferSelect): Source {
@@ -65,7 +66,7 @@ export async function updateSource(input: Partial<CreateSourceInput> & { id: str
     .where(eq(schema.sources.id, input.id));
   const [row] = await db.select().from(schema.sources).where(eq(schema.sources.id, input.id));
   if (!row) {
-    throw new Error('Источник не найден');
+    throw new Error(localizedError('errors.sourceNotFound'));
   }
   return mapSource(row);
 }
@@ -117,10 +118,10 @@ export async function createCitation(input: CreateCitationInput): Promise<Citati
     sourceId = source.id;
   }
   if (!sourceId) {
-    throw new Error('Укажите источник');
+    throw new Error(localizedError('errors.sourceRequired'));
   }
   if (!input.personId && !input.eventId) {
-    throw new Error('Цитата должна относиться к человеку или событию');
+    throw new Error(localizedError('errors.citationNeedsSubject'));
   }
 
   const db = getDatabase();

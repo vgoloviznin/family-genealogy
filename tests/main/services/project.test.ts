@@ -4,6 +4,7 @@ import { join } from 'path';
 import { createTestProjectDir, createTestProjectFiles } from '../../helpers/project-fixture';
 import { isSqliteAvailable } from '../../helpers/sqlite-available';
 import { closeProject, openProjectAtPath, updateProjectName, listRecentProjects } from '@main/services/project';
+import { localizedErrorMessage } from '../../helpers/localized-error';
 
 const recentPaths: string[] = [];
 
@@ -60,7 +61,7 @@ describe('project service', () => {
       const project = createTestProjectDir('Stable');
       try {
         openProjectAtPath(project.path);
-        expect(() => updateProjectName('   ')).toThrow('Название проекта не может быть пустым');
+        expect(() => updateProjectName('   ')).toThrow(localizedErrorMessage('errors.projectNameEmpty'));
       } finally {
         closeProject();
         project.cleanup();

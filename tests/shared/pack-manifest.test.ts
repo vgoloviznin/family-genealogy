@@ -3,6 +3,7 @@ import { join } from 'path';
 import { readFileSync, writeFileSync } from 'fs';
 import { createHash } from 'crypto';
 import { validatePackManifest, verifyPackDatabaseHash } from '@shared/pack-manifest';
+import { localizedErrorMessage } from '../helpers/localized-error';
 import { createEmptyDir, createTestProjectDir, removeDir } from '../helpers/project-fixture';
 import { isSqliteAvailable } from '../helpers/sqlite-available';
 import { closeDatabase } from '@main/db/connection';
@@ -46,7 +47,7 @@ describe('pack manifest', () => {
   });
 
   it('rejects unknown archive format', () => {
-    expect(() => validatePackManifest({ format: 'zip' })).toThrow('Неверный формат архива');
+    expect(() => validatePackManifest({ format: 'zip' })).toThrow(localizedErrorMessage('errors.invalidArchiveFormat'));
   });
 
   it('detects sqlite hash mismatch', async () => {
@@ -55,7 +56,7 @@ describe('pack manifest', () => {
     writeFileSync(dbPath, 'test-db-content');
     try {
       await expect(verifyPackDatabaseHash({ format: 'fgtree', sqliteSha256: 'deadbeef' } as never, dbPath, sha256File)).rejects.toThrow(
-        'Кontрольная сумма базы данных не совпадает'
+        localizedErrorMessage('errors.dbHashMismatch')
       );
     } finally {
       removeDir(dir);

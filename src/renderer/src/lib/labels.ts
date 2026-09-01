@@ -1,12 +1,15 @@
-import type { PartialDate, DatePrecision, Sex } from '@shared/types';
-export { UNION_TYPE_LABELS, normalizeUnionType } from '@shared/union-type';
+import type { AppLocale, PartialDate, DatePrecision, Sex, UnionType } from '@shared/types';
+import { formatPartialDate } from '@shared/format-partial-date';
+import { normalizeUnionType } from '@shared/union-type';
+import i18n from '../i18n';
+
+export { normalizeUnionType };
 
 export function personLabel(p: { firstName: string; lastName: string; middleName?: string | null }): string {
   const label = [p.lastName, p.firstName, p.middleName].filter(Boolean).join(' ');
-  return label || 'Новый человек';
+  return label || i18n.t('enum.newPerson');
 }
 
-/** Компактная подпись для карточки в древе: «Иванов И. П.» */
 export function personShortLabel(p: { firstName: string; lastName: string; middleName?: string | null }): string {
   const last = p.lastName.trim();
   const initials = [p.firstName, p.middleName]
@@ -32,118 +35,98 @@ export function personInitials(p: { firstName: string; lastName: string }): stri
 }
 
 export function formatDate(d: PartialDate): string {
-  if (d.originalText) {
-    return d.originalText;
-  }
-  const parts: string[] = [];
-  if (d.precision === 'circa') {
-    parts.push('ок.');
-  }
-  if (d.precision === 'before') {
-    parts.push('до');
-  }
-  if (d.precision === 'after') {
-    parts.push('после');
-  }
-  if (d.day) {
-    parts.push(String(d.day).padStart(2, '0'));
-  }
-  if (d.month) {
-    parts.push(String(d.month).padStart(2, '0'));
-  }
-  if (d.year) {
-    parts.push(String(d.year));
-  }
-  return parts.join('.') || '—';
+  return formatPartialDate(d, i18n.language as AppLocale);
 }
 
-export const EVENT_TYPE_LABELS: Record<string, string> = {
-  birth: 'Рождение',
-  baptism: 'Крещение',
-  death: 'Смерть',
-  burial: 'Погребение',
-  cremation: 'Кремация',
-  adoption: 'Усыновление',
-  education: 'Образование',
-  occupation: 'Профессия',
-  residence: 'Проживание',
-  emigration: 'Эмиграция',
-  immigration: 'Иммиграция',
-  census: 'Перепись',
-  military: 'Военная служба',
-  retirement: 'Пенсия',
-  will: 'Завещание',
-  engagement: 'Помолвка',
-  marriage: 'Брак',
-  divorce: 'Развод',
-  cohabitation: 'Совместное проживание',
-  custom: 'Другое'
-};
+export function eventTypeLabel(code: string): string {
+  return i18n.t(`enum.eventType.${code}`, { defaultValue: code });
+}
 
-export const ASSOCIATION_LABELS: Record<string, string> = {
-  godparent: 'Крёстный',
-  witness: 'Свидетель',
-  clergy: 'Священник',
-  officiator: 'Совершавший обряд',
-  friend: 'Друг',
-  neighbor: 'Сосед',
-  guardian: 'Опекун',
-  executor: 'Исполнитель завещания',
-  other: 'Другое'
-};
+export function associationLabel(code: string): string {
+  return i18n.t(`enum.association.${code}`, { defaultValue: code });
+}
 
-export const PEDIGREE_LABELS: Record<string, string> = {
-  birth: 'Биологический',
-  adopted: 'Усыновлённый',
-  step: 'Отчим/мачеха',
-  foster: 'Опека'
-};
+export function pedigreeLabel(code: string): string {
+  return i18n.t(`enum.pedigree.${code}`, { defaultValue: code });
+}
 
-export const SEX_LABELS: Record<string, string> = {
-  male: 'Мужской',
-  female: 'Женский',
-  other: 'Другое',
-  unknown: 'Неизвестно'
-};
+export function sexLabel(code: string): string {
+  return i18n.t(`enum.sex.${code}`, { defaultValue: code });
+}
+
+export function sourceTypeLabel(code: string): string {
+  return i18n.t(`enum.sourceType.${code}`, { defaultValue: code });
+}
+
+export function unionTypeLabel(code: string | null | undefined): string {
+  return i18n.t(`enum.unionType.${normalizeUnionType(code)}`);
+}
+
+export function enumOptions(prefix: string, codes: string[]): [string, string][] {
+  return codes.map((code) => [code, i18n.t(`${prefix}.${code}`, { defaultValue: code })]);
+}
+
+export const EVENT_TYPE_CODES = [
+  'birth',
+  'baptism',
+  'death',
+  'burial',
+  'cremation',
+  'adoption',
+  'education',
+  'occupation',
+  'residence',
+  'emigration',
+  'immigration',
+  'census',
+  'military',
+  'retirement',
+  'will',
+  'engagement',
+  'marriage',
+  'divorce',
+  'cohabitation',
+  'custom'
+] as const;
+
+export const ASSOCIATION_CODES = ['godparent', 'witness', 'clergy', 'officiator', 'friend', 'neighbor', 'guardian', 'executor', 'other'] as const;
+
+export const PEDIGREE_CODES = ['birth', 'adopted', 'step', 'foster'] as const;
+
+export const SEX_CODES = ['male', 'female', 'other', 'unknown'] as const;
+
+export const SOURCE_TYPE_CODES = ['book', 'archive', 'document', 'oral', 'website', 'photo', 'other'] as const;
+
+export const UNION_TYPE_CODES: UnionType[] = ['unknown', 'marriage', 'partnership'];
 
 export function spouseLabel(sex?: Sex | null): string {
   if (sex === 'female') {
-    return 'Супруга';
+    return i18n.t('enum.spouse.female');
   }
   if (sex === 'male') {
-    return 'Супруг';
+    return i18n.t('enum.spouse.male');
   }
-  return 'Супруг(а)';
+  return i18n.t('enum.spouse.other');
 }
 
 export function siblingLabel(sex?: Sex | null): string {
   if (sex === 'female') {
-    return 'Сестра';
+    return i18n.t('enum.sibling.female');
   }
   if (sex === 'male') {
-    return 'Брат';
+    return i18n.t('enum.sibling.male');
   }
-  return 'Брат/сестра';
+  return i18n.t('enum.sibling.other');
 }
-
-export const SOURCE_TYPE_LABELS: Record<string, string> = {
-  book: 'Книга',
-  archive: 'Архив',
-  document: 'Документ',
-  oral: 'Устный рассказ',
-  website: 'Сайт',
-  photo: 'Фото',
-  other: 'Другое'
-};
 
 export function deceasedLabel(sex?: Sex | null): string {
   if (sex === 'male') {
-    return 'умер';
+    return i18n.t('enum.deceased.male');
   }
   if (sex === 'female') {
-    return 'умерла';
+    return i18n.t('enum.deceased.female');
   }
-  return 'умер(ла)';
+  return i18n.t('enum.deceased.other');
 }
 
 export function formatLifeSpan(p: { isLiving: boolean; birthYear?: number | null; deathYear?: number | null; sex?: Sex | null }): string {
@@ -151,21 +134,20 @@ export function formatLifeSpan(p: { isLiving: boolean; birthYear?: number | null
     return `${p.birthYear}–${p.deathYear}`;
   }
   if (p.birthYear && p.isLiving) {
-    return `р. ${p.birthYear}`;
+    return i18n.t('lifeSpan.born', { year: p.birthYear });
   }
   if (p.birthYear) {
-    return `р. ${p.birthYear} – ${deceasedLabel(p.sex)}`;
+    return i18n.t('lifeSpan.bornDeceased', { year: p.birthYear, deceased: deceasedLabel(p.sex) });
   }
   if (p.deathYear) {
-    return `${deceasedLabel(p.sex)}, ${p.deathYear}`;
+    return i18n.t('lifeSpan.deceasedYear', { deceased: deceasedLabel(p.sex), year: p.deathYear });
   }
-  return p.isLiving ? 'жив' : deceasedLabel(p.sex);
+  return p.isLiving ? i18n.t('lifeSpan.living') : deceasedLabel(p.sex);
 }
 
-/** События, неуместные для живого человека */
 export const DEATH_RELATED_EVENTS = new Set(['death', 'burial', 'cremation']);
 
-export const ADDABLE_EVENT_TYPES = Object.entries(EVENT_TYPE_LABELS).filter(([code]) => !['birth', 'death', 'burial'].includes(code));
+export const ADDABLE_EVENT_TYPE_CODES = EVENT_TYPE_CODES.filter((code) => !['birth', 'death', 'burial'].includes(code));
 
 export const emptyDate = (): PartialDate => ({
   precision: 'unknown' as DatePrecision,
@@ -177,3 +159,7 @@ export const emptyDate = (): PartialDate => ({
   originalText: null,
   sortKey: null
 });
+
+export function mergeColumnLabel(column: string): string {
+  return i18n.t(`merge.column.${column}`, { defaultValue: column });
+}

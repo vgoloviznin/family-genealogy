@@ -4,6 +4,7 @@ import * as schema from '../db/schema';
 import { newId, nowIso } from '../utils/id';
 import { normalizePartialDate, defaultDate } from '../utils/dates';
 import { getDeviceMeta } from './settings';
+import { localizedError } from '../i18n';
 import { attachThumbs, loadLifeYears, mapEvent, mapPerson, getPlaceName } from './person-mapper';
 import { getPersonDetail } from './person-detail';
 import type { Person, LifeEvent, PartialDate, CreatePersonInput, UpdatePersonInput, PersonDetail } from '@shared/types';
@@ -203,7 +204,7 @@ export async function updatePerson(input: UpdatePersonInput): Promise<PersonDeta
 
   const detail = await getPersonDetail(input.id);
   if (!detail) {
-    throw new Error('Person not found');
+    throw new Error(localizedError('errors.personNotFound'));
   }
 
   if (input.birth !== undefined) {

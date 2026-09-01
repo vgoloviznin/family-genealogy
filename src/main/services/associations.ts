@@ -3,6 +3,7 @@ import { getDatabase } from '../db/connection';
 import * as schema from '../db/schema';
 import { newId, nowIso } from '../utils/id';
 import { getDeviceMeta } from './settings';
+import { localizedError } from '../i18n';
 import { mapPerson } from './person-mapper';
 import type { AssociationView, CreateAssociationInput } from '@shared/types';
 
@@ -64,7 +65,7 @@ export async function createAssociation(input: CreateAssociationInput): Promise<
   const list = await listAssociationsForPerson(input.fromPersonId);
   const created = list.find((a) => a.id === id);
   if (!created) {
-    throw new Error('Failed to create association');
+    throw new Error(localizedError('errors.associationCreateFailed'));
   }
   return created;
 }

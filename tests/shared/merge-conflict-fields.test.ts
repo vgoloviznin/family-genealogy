@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { getColumnLabel, getConflictFieldDiffs, getConflictRowLabel } from '@shared/merge-conflict-fields';
+import { getConflictFieldDiffs, getConflictRowLabel } from '@shared/merge-conflict-fields';
+import { mergeColumnLabelKey } from '@shared/locales';
 
 describe('merge-conflict-fields', () => {
   it('labels people as «Фамилия Имя»', () => {
@@ -16,10 +17,9 @@ describe('merge-conflict-fields', () => {
     expect(getConflictRowLabel('events', { id: 'e1', type: 'birth' })).toBe('events:e1');
   });
 
-  it('returns Russian column labels', () => {
-    expect(getColumnLabel('first_name')).toBe('Имя');
-    expect(getColumnLabel('notes')).toBe('Заметки');
-    expect(getColumnLabel('unknown_col')).toBe('unknown_col');
+  it('returns merge column label keys', () => {
+    expect(mergeColumnLabelKey('first_name')).toBe('merge.column.first_name');
+    expect(mergeColumnLabelKey('notes')).toBe('merge.column.notes');
   });
 
   it('diffs only changed mergeable columns', () => {

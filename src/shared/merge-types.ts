@@ -170,8 +170,8 @@ export interface BatchMergePreviewResult {
   /** One conflict per table+id; last archive that still conflicts wins. */
   allConflicts: MergeConflict[];
   unresolvedConflicts: number;
-  /** Explains remote assumption used while advancing temp master. */
-  previewNote?: string;
+  /** Locale key for batch preview disclaimer (rendered in UI). */
+  previewNoteKey?: string;
   totalStats?: Partial<Record<MergeableTable, MergeTableStats>>;
 }
 

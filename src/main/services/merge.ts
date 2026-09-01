@@ -20,6 +20,7 @@ import {
   type MergeTableStats,
   type RowDecision
 } from '@shared/merge-types';
+import { localizedError } from '../i18n';
 
 /** Preview payload from DB merge; pack layer adds archivePath. */
 export type MergeDatabasePreview = Omit<MergePreviewResult, 'archivePath'>;
@@ -88,11 +89,11 @@ function openLocalMergeTarget(localProjectPath: string): {
   cleanup: () => void;
 } {
   if (!existsSync(join(localProjectPath, 'project.json'))) {
-    throw new Error('В папке нет project.json — это не проект Family Geneology.');
+    throw new Error(localizedError('errors.notAProject'));
   }
   const expected = join(localProjectPath, 'family.sqlite');
   if (!existsSync(expected)) {
-    throw new Error('В проекте нет family.sqlite');
+    throw new Error(localizedError('errors.projectNoDb'));
   }
 
   if (getDatabasePath() === expected) {
@@ -122,7 +123,7 @@ function openLocalMergeTarget(localProjectPath: string): {
 function openIncomingCopy(incomingProjectPath: string): { db: Database.Database; cleanup: () => void } {
   const incomingDb = join(incomingProjectPath, 'family.sqlite');
   if (!existsSync(incomingDb)) {
-    throw new Error('В архиве нет family.sqlite');
+    throw new Error(localizedError('errors.invalidArchiveNoDb'));
   }
   const tempDir = mkdtempSync(join(tmpdir(), 'fgtree-merge-in-'));
   const tempDb = join(tempDir, 'family.sqlite');
@@ -145,7 +146,7 @@ function upsertRow(sqlite: Database.Database, table: MergeableTable, row: MergeR
   const info = sqlite.pragma(`table_info(${table})`) as Array<{ name: string }>;
   const cols = info.map((c) => c.name).filter((name) => Object.prototype.hasOwnProperty.call(row, name));
   if (cols.length === 0 || !cols.includes('id')) {
-    throw new Error(`Некорректная строка для ${table}`);
+    throw new Error(localizedError('errors.invalidRow', { table }));
   }
   const placeholders = cols.map(() => '?').join(', ');
   const updates = cols
@@ -202,7 +203,7 @@ function assertNoOrphans(sqlite: Database.Database): void {
   for (const check of checks) {
     const row = sqlite.prepare(check.sql).get() as { n: number };
     if (row.n > 0) {
-      throw new Error(`Обнаружены битые ссылки после слияния (${check.label})`);
+      throw new Error(localizedError('errors.brokenRefs', { label: check.label }));
     }
   }
 }
@@ -399,17 +400,17 @@ export async function mergeIncomingDatabase(options: MergeIncomingOptions): Prom
   const { localProjectPath, incomingProjectPath, mode, resolutions = [], backupPath = null } = options;
 
   if (!existsSync(join(incomingProjectPath, 'project.json'))) {
-    throw new Error('В архиве нет project.json');
+    throw new Error(localizedError('errors.invalidArchiveNoProject'));
   }
 
   const localMeta = getProjectJson(localProjectPath);
   const incomingMeta = getProjectJson(incomingProjectPath);
 
   if (incomingMeta.projectId !== localMeta.projectId) {
-    throw new Error('Это архив другого проекта');
+    throw new Error(localizedError('errors.wrongProjectArchive'));
   }
   if (incomingMeta.schemaVersion > SCHEMA_VERSION) {
-    throw new Error('Архив создан в более новой версии приложения');
+    throw new Error(localizedError('errors.archiveNewerVersion'));
   }
 
   const localTarget = openLocalMergeTarget(localProjectPath);
@@ -435,7 +436,7 @@ export async function mergeIncomingDatabase(options: MergeIncomingOptions): Prom
 
     remoteTables.events = applyPlaceRemapToRows(remoteTables.events, placePlan.remap);
 
-    const resolutionMap = new Map(resolutions.map((r) => [`${r.table}:${r.id}`, r.choice] as const));
+    const resolutionMap = new Map<string, 'local' | 'remote'>(resolutions.map((r) => [`${r.table}:${r.id}`, r.choice]));
 
     const stats: Partial<Record<MergeableTable, MergeTableStats>> = {};
     const conflicts: MergeConflict[] = [];
@@ -555,7 +556,7 @@ export async function mergeIncomingDatabase(options: MergeIncomingOptions): Prom
 
     if (mode === 'apply') {
       if (conflicts.length > 0) {
-        throw new Error('Есть неразрешённые конфликты');
+        throw new Error(localizedError('errors.unresolvedConflicts'));
       }
 
       const applyTx = localSqlite.transaction(() => {

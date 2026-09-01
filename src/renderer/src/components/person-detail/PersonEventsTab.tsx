@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { PersonDetail, UpsertEventInput, EventTypeCode, LifeEvent } from '@shared/types';
 import { DateFields } from '../DateFields';
 import { PlaceField } from '../PlaceField';
-import { formatDate, EVENT_TYPE_LABELS, ADDABLE_EVENT_TYPES, DEATH_RELATED_EVENTS, emptyDate } from '../../lib/labels';
+import { formatDate, eventTypeLabel, ADDABLE_EVENT_TYPE_CODES, EVENT_TYPE_CODES, DEATH_RELATED_EVENTS, emptyDate } from '../../lib/labels';
 import { snapshotEvent } from './helpers';
 import { ActionBtn, DangerBtn, EmptyState, GhostBtn } from './ui';
 
@@ -13,7 +13,7 @@ interface Props {
 }
 
 export function PersonEventsTab({ person, onRefresh }: Props) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [editingEventId, setEditingEventId] = useState<string | 'new' | null>(null);
   const [eventDraft, setEventDraft] = useState<UpsertEventInput>({
     type: 'residence',
@@ -32,9 +32,14 @@ export function PersonEventsTab({ person, onRefresh }: Props) {
   }, [person]);
 
   const addableEventTypes = useMemo(
-    () => ADDABLE_EVENT_TYPES.filter(([code]) => !person.isLiving || !DEATH_RELATED_EVENTS.has(code)),
-    [person.isLiving]
+    () => ADDABLE_EVENT_TYPE_CODES.filter((code) => !person.isLiving || !DEATH_RELATED_EVENTS.has(code)),
+    [person.isLiving, i18n.language]
   );
+
+  const eventTypeOptions = useMemo(() => {
+    const codes = editingEventId === 'new' ? addableEventTypes : [...EVENT_TYPE_CODES];
+    return codes.map((code) => [code, eventTypeLabel(code)] as const);
+  }, [editingEventId, addableEventTypes, i18n.language]);
 
   const saveEventDraft = async () => {
     const created = await window.api.events.upsert({ ...eventDraft, personId: person.id });
@@ -86,14 +91,14 @@ export function PersonEventsTab({ person, onRefresh }: Props) {
       {editingEventId !== null && (
         <div className="border rounded-lg p-3 space-y-2 bg-stone-50">
           <label className="block text-sm">
-            Тип события
+            {t('eventType')}
             <select
               className="w-full border rounded px-2 py-1 mt-1"
               value={eventDraft.type}
               onChange={(e) => setEventDraft({ ...eventDraft, type: e.target.value as EventTypeCode })}
               disabled={editingEventId !== 'new'}
             >
-              {(editingEventId === 'new' ? addableEventTypes : Object.entries(EVENT_TYPE_LABELS)).map(([code, label]) => (
+              {eventTypeOptions.map(([code, label]) => (
                 <option key={code} value={code}>
                   {label}
                 </option>
@@ -103,7 +108,7 @@ export function PersonEventsTab({ person, onRefresh }: Props) {
           <PlaceField value={eventDraft.placeName ?? ''} onChange={(v) => setEventDraft({ ...eventDraft, placeName: v })} />
           <DateFields value={eventDraft.date} onChange={(d) => setEventDraft({ ...eventDraft, date: d })} />
           <label className="block text-sm">
-            Описание
+            {t('description')}
             <textarea
               className="w-full border rounded px-2 py-1 mt-1"
               value={eventDraft.description ?? ''}
@@ -121,16 +126,16 @@ export function PersonEventsTab({ person, onRefresh }: Props) {
         </div>
       )}
       {allEvents.length === 0 && editingEventId === null ? (
-        <EmptyState text="События жизни пока не добавлены." />
+        <EmptyState text={t('personDetail.emptyEvents')} />
       ) : (
         <ul className="space-y-2">
           {allEvents.map((ev) => (
             <li key={ev.id} className="border border-stone-300 rounded-lg p-2.5 text-sm bg-stone-50">
               <div className="flex justify-between gap-2">
-                <strong className="text-stone-900">{EVENT_TYPE_LABELS[ev.type] ?? ev.customLabel ?? ev.type}</strong>
+                <strong className="text-stone-900">{eventTypeLabel(ev.type) || ev.customLabel || ev.type}</strong>
                 <div className="flex gap-1.5 shrink-0">
                   <GhostBtn
-                    label="Изменить"
+                    label={t('personDetail.editEvent')}
                     onClick={() => {
                       setEventDraft(snapshotEvent(ev));
                       setEditingEventId(ev.id);

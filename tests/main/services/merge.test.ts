@@ -12,9 +12,18 @@ import { closeProject } from '@main/services/project';
 import { createPerson, listPeople, updatePerson, deletePerson } from '@main/services/people';
 import { addChildToPerson, getFamiliesForPerson } from '@main/services/family';
 import { upsertEventRecord, upsertPlaceByName } from '@main/services/people';
-import { mergeIncomingDatabase } from '@main/services/merge';
+import type { MergeApplyResult } from '@shared/merge-types';
+import { mergeIncomingDatabase, type MergeDatabasePreview } from '@main/services/merge';
+import { localizedErrorMessage } from '../../helpers/localized-error';
 import { newId } from '@main/utils/id';
 import type Database from 'better-sqlite3';
+
+function assertMergePreview(result: MergeDatabasePreview | MergeApplyResult): MergeDatabasePreview {
+  if ('applied' in result) {
+    throw new Error('Expected merge preview, got apply result');
+  }
+  return result;
+}
 
 function sha256(buf: Buffer): string {
   return createHash('sha256').update(buf).digest('hex');
@@ -260,10 +269,10 @@ describe.skipIf(!isSqliteAvailable())('mergeIncomingDatabase', () => {
           incomingProjectPath: fork.path,
           mode: 'preview'
         });
-        expect('applied' in preview).toBe(false);
-        expect(preview.conflicts).toHaveLength(1);
-        expect(preview.conflicts[0].id).toBe(person.id);
-        expect(preview.conflicts[0].detail?.fields).toEqual(
+        const previewResult = assertMergePreview(preview);
+        expect(previewResult.conflicts).toHaveLength(1);
+        expect(previewResult.conflicts[0].id).toBe(person.id);
+        expect(previewResult.conflicts[0].detail?.fields).toEqual(
           expect.arrayContaining([{ column: 'notes', local: 'local-notes', remote: 'remote-notes' }])
         );
 
@@ -273,7 +282,7 @@ describe.skipIf(!isSqliteAvailable())('mergeIncomingDatabase', () => {
             incomingProjectPath: fork.path,
             mode: 'apply'
           })
-        ).rejects.toThrow('Есть неразрешённые конфликты');
+        ).rejects.toThrow(localizedErrorMessage('errors.unresolvedConflicts'));
 
         const [row] = await getDatabase().select().from(schema.people).where(eq(schema.people.id, person.id));
         expect(row.notes).toBe('local-notes');
@@ -447,7 +456,7 @@ describe.skipIf(!isSqliteAvailable())('mergeIncomingDatabase', () => {
             incomingProjectPath: fork.path,
             mode: 'preview'
           })
-        ).rejects.toThrow('Это архив другого проекта');
+        ).rejects.toThrow(localizedErrorMessage('errors.wrongProjectArchive'));
       } finally {
         fork.cleanup();
       }
@@ -740,7 +749,7 @@ describe.skipIf(!isSqliteAvailable())('mergeIncomingDatabase', () => {
             incomingProjectPath: fork.path,
             mode: 'preview'
           })
-        ).rejects.toThrow('Архив создан в более новой версии приложения');
+        ).rejects.toThrow(localizedErrorMessage('errors.archiveNewerVersion'));
       } finally {
         fork.cleanup();
       }

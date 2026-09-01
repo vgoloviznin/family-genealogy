@@ -14,7 +14,7 @@ export function PersonMediaTab({ person, onRefresh }: Props) {
     <>
       <ActionBtn label={t('addMedia')} onClick={() => void window.api.media.add({ personId: person.id }).then(onRefresh)} />
       {person.media.length === 0 ? (
-        <EmptyState text="Фото и документы пока не прикреплены." />
+        <EmptyState text={t('personDetail.emptyMedia')} />
       ) : (
         <div className="grid grid-cols-3 gap-2">
           {person.media.map((m) => (
@@ -26,8 +26,10 @@ export function PersonMediaTab({ person, onRefresh }: Props) {
               )}
               <div className="text-xs font-medium truncate text-stone-900">{m.fileName}</div>
               <div className="flex gap-1 justify-center mt-1.5 flex-wrap">
-                <GhostBtn label="Открыть" onClick={() => void window.api.media.open(m.id)} />
-                {!m.isPrimary && <GhostBtn label="Главное" onClick={() => void window.api.media.setPrimary(person.id, m.id).then(onRefresh)} />}
+                <GhostBtn label={t('personDetail.openMedia')} onClick={() => void window.api.media.open(m.id)} />
+                {!m.isPrimary && (
+                  <GhostBtn label={t('personDetail.setPrimaryMedia')} onClick={() => void window.api.media.setPrimary(person.id, m.id).then(onRefresh)} />
+                )}
                 <DangerBtn
                   label={t('delete')}
                   onClick={() => {

@@ -11,6 +11,7 @@ import { packProjectArchive, previewSyncFromArchivePath, applySyncFromArchivePat
 import { newId } from '@main/utils/id';
 import { openStandaloneDatabase } from '@main/db/connection';
 import { clearUndo } from '@main/services/undo';
+import { localizedErrorMessage } from '../../helpers/localized-error';
 
 vi.mock('@main/services/settings', () => ({
   getDeviceMeta: () => ({ deviceId: 'pack-sync-device', label: 'tester' }),
@@ -108,7 +109,7 @@ describe.skipIf(!isSqliteAvailable())('pack sync path API', () => {
       await packProjectArchive(otherFiles.path, archivePath, 'export');
 
       openProjectAtPath(local.path);
-      await expect(applySyncFromArchivePath(archivePath, [])).rejects.toThrow('Это архив другого проекта');
+      await expect(applySyncFromArchivePath(archivePath, [])).rejects.toThrow(localizedErrorMessage('errors.wrongProjectArchive'));
 
       const after = await listPeople();
       expect(after.map((p) => p.id).sort()).toEqual(beforeIds);
