@@ -77,7 +77,7 @@ npm run build:mac    # dmg для macOS arm64 (ad-hoc identity)
 npm run build:win    # NSIS для Windows x64
 ```
 
-Node 20+ (`.nvmrc`). GitHub Actions: `.github/workflows/ci.yml` (PR/`main`), `.github/workflows/release.yml` (теги `v*`).
+Node 22+ (`.nvmrc`). GitHub Actions: `.github/workflows/ci.yml` (PR/`main`), `.github/workflows/release.yml` (теги `v*`).
 
 ## Формат проекта
 
