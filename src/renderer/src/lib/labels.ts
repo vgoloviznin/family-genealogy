@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import type { AppLocale, PartialDate, DatePrecision, Sex, UnionType } from '@shared/types';
 import { formatPartialDate } from '@shared/format-partial-date';
 import { normalizeUnionType } from '@shared/union-type';
@@ -8,6 +9,10 @@ export { normalizeUnionType };
 export function personLabel(p: { firstName: string; lastName: string; middleName?: string | null }): string {
   const label = [p.lastName, p.firstName, p.middleName].filter(Boolean).join(' ');
   return label || i18n.t('enum.newPerson');
+}
+
+export function personLabelEn(p: { firstNameEn?: string | null; lastNameEn?: string | null; middleNameEn?: string | null }): string {
+  return [p.lastNameEn, p.firstNameEn, p.middleNameEn].filter(Boolean).join(' ');
 }
 
 export function personShortLabel(p: { firstName: string; lastName: string; middleName?: string | null }): string {
@@ -119,30 +124,33 @@ export function siblingLabel(sex?: Sex | null): string {
   return i18n.t('enum.sibling.other');
 }
 
-export function deceasedLabel(sex?: Sex | null): string {
+export function deceasedLabel(sex?: Sex | null, t: TFunction = i18n.t.bind(i18n)): string {
   if (sex === 'male') {
-    return i18n.t('enum.deceased.male');
+    return t('enum.deceased.male');
   }
   if (sex === 'female') {
-    return i18n.t('enum.deceased.female');
+    return t('enum.deceased.female');
   }
-  return i18n.t('enum.deceased.other');
+  return t('enum.deceased.other');
 }
 
-export function formatLifeSpan(p: { isLiving: boolean; birthYear?: number | null; deathYear?: number | null; sex?: Sex | null }): string {
+export function formatLifeSpan(
+  p: { isLiving: boolean; birthYear?: number | null; deathYear?: number | null; sex?: Sex | null },
+  t: TFunction = i18n.t.bind(i18n)
+): string {
   if (p.birthYear && p.deathYear) {
     return `${p.birthYear}–${p.deathYear}`;
   }
   if (p.birthYear && p.isLiving) {
-    return i18n.t('lifeSpan.born', { year: p.birthYear });
+    return t('lifeSpan.born', { year: p.birthYear });
   }
   if (p.birthYear) {
-    return i18n.t('lifeSpan.bornDeceased', { year: p.birthYear, deceased: deceasedLabel(p.sex) });
+    return t('lifeSpan.bornDeceased', { year: p.birthYear, deceased: deceasedLabel(p.sex, t) });
   }
   if (p.deathYear) {
-    return i18n.t('lifeSpan.deceasedYear', { deceased: deceasedLabel(p.sex), year: p.deathYear });
+    return t('lifeSpan.deceasedYear', { deceased: deceasedLabel(p.sex, t), year: p.deathYear });
   }
-  return p.isLiving ? i18n.t('lifeSpan.living') : deceasedLabel(p.sex);
+  return p.isLiving ? t('lifeSpan.living') : deceasedLabel(p.sex, t);
 }
 
 export const DEATH_RELATED_EVENTS = new Set(['death', 'burial', 'cremation']);

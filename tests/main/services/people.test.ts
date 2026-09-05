@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestProjectDir } from '../../helpers/project-fixture';
 import { isSqliteAvailable } from '../../helpers/sqlite-available';
 import { closeProject } from '@main/services/project';
-import { createPerson, getPersonDetail, updatePerson } from '@main/services/people';
+import { createPerson, getPersonDetail, searchPeople, updatePerson } from '@main/services/people';
 
 vi.mock('@main/services/settings', () => ({
   getDeviceMeta: () => ({ deviceId: 'test-device', label: 'tester' }),
@@ -60,6 +60,34 @@ describe.skipIf(!isSqliteAvailable())('people service', () => {
       const detail = await getPersonDetail(person.id);
       expect(detail?.isLiving).toBe(true);
       expect(detail?.burialEvent).toBeNull();
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('stores and searches English name fields', async () => {
+    const project = createTestProjectDir();
+    try {
+      const person = await createPerson({
+        firstName: 'Иван',
+        lastName: 'Иванов',
+        firstNameEn: 'Ivan',
+        lastNameEn: 'Ivanov',
+        middleNameEn: 'Petrovich'
+      });
+      expect(person.firstNameEn).toBe('Ivan');
+      expect(person.lastNameEn).toBe('Ivanov');
+      expect(person.middleNameEn).toBe('Petrovich');
+
+      const updated = await updatePerson({
+        id: person.id,
+        maidenNameEn: 'Sidorova'
+      });
+      expect(updated.maidenNameEn).toBe('Sidorova');
+      expect(updated.firstNameEn).toBe('Ivan');
+
+      const found = await searchPeople('ivanov');
+      expect(found.some((p) => p.id === person.id)).toBe(true);
     } finally {
       project.cleanup();
     }

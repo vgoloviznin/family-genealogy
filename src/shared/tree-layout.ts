@@ -5,7 +5,7 @@ export const PEDIGREE_NODE_MAX_W = 320;
 /** @deprecated use PEDIGREE_NODE_MIN_W */
 export const PEDIGREE_NODE_W = PEDIGREE_NODE_MIN_W;
 export const PEDIGREE_NODE_H = 96;
-export const PEDIGREE_CARD_H = 52;
+export const PEDIGREE_CARD_H = 66;
 export const PEDIGREE_COUPLE_GAP = 28;
 export const PEDIGREE_SIBLING_GAP = 40;
 export const PEDIGREE_FAMILY_GAP = 80;
@@ -18,36 +18,61 @@ const CHAR_W_SECONDARY = 7.5;
 export interface PersonNameLines {
   primary: string;
   secondary: string | null;
+  english: string | null;
 }
 
-export function compactNameLines(person: { firstName: string; lastName: string; middleName?: string | null }, emptyNameLabel = ''): PersonNameLines {
+export function compactNameLines(
+  person: {
+    firstName: string;
+    lastName: string;
+    middleName?: string | null;
+    firstNameEn?: string | null;
+    lastNameEn?: string | null;
+    middleNameEn?: string | null;
+  },
+  emptyNameLabel = ''
+): PersonNameLines {
   const last = person.lastName.trim();
   const given = [person.firstName, person.middleName]
     .map((part) => part?.trim())
     .filter(Boolean)
     .join(' ');
+  const english = [person.lastNameEn, person.firstNameEn, person.middleNameEn]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(' ');
+  const englishLine = english || null;
   if (last && given) {
-    return { primary: last, secondary: given };
+    return { primary: last, secondary: given, english: englishLine };
   }
   if (last) {
-    return { primary: last, secondary: null };
+    return { primary: last, secondary: null, english: englishLine };
   }
   if (given) {
-    return { primary: given, secondary: null };
+    return { primary: given, secondary: null, english: englishLine };
   }
   const full = [last, person.firstName, person.middleName].filter(Boolean).join(' ').trim();
-  return { primary: full || emptyNameLabel, secondary: null };
+  return { primary: full || emptyNameLabel, secondary: null, english: englishLine };
 }
 
 export function estimatePedigreeCardWidth(lines: PersonNameLines): number {
   const primaryW = lines.primary.length * CHAR_W_PRIMARY;
   const secondaryW = lines.secondary ? lines.secondary.length * CHAR_W_SECONDARY : 0;
-  const textW = Math.max(primaryW, secondaryW);
+  const englishW = lines.english ? lines.english.length * CHAR_W_SECONDARY : 0;
+  const textW = Math.max(primaryW, secondaryW, englishW);
   return Math.min(PEDIGREE_NODE_MAX_W, Math.max(PEDIGREE_NODE_MIN_W, Math.ceil(textW + CARD_CHROME_W)));
 }
 
 export function buildPedigreeNodeWidths(
-  people: Array<{ id: string; firstName: string; lastName: string; middleName?: string | null }>,
+  people: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    middleName?: string | null;
+    firstNameEn?: string | null;
+    lastNameEn?: string | null;
+    middleNameEn?: string | null;
+  }>,
   emptyNameLabel = ''
 ): Map<string, number> {
   const widths = new Map<string, number>();

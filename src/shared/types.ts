@@ -158,6 +158,10 @@ export interface Person {
   lastName: string;
   middleName?: string | null;
   maidenName?: string | null;
+  firstNameEn: string;
+  lastNameEn: string;
+  middleNameEn?: string | null;
+  maidenNameEn?: string | null;
   sex: Sex;
   isLiving: boolean;
   notes?: string | null;
@@ -304,6 +308,10 @@ export interface CreatePersonInput {
   lastName: string;
   middleName?: string;
   maidenName?: string;
+  firstNameEn?: string;
+  lastNameEn?: string;
+  middleNameEn?: string;
+  maidenNameEn?: string;
   sex?: Sex;
   isLiving?: boolean;
   notes?: string;

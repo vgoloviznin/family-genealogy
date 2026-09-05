@@ -33,7 +33,21 @@ export const MERGE_TABLE_ORDER: readonly MergeableTable[] = [
  */
 export const MERGEABLE_COLUMNS: Record<MergeableTable, readonly string[]> = {
   places: ['name', 'normalized_name', 'deleted_at'],
-  people: ['first_name', 'last_name', 'middle_name', 'maiden_name', 'sex', 'is_living', 'notes', 'primary_photo_id', 'deleted_at'],
+  people: [
+    'first_name',
+    'last_name',
+    'middle_name',
+    'maiden_name',
+    'first_name_en',
+    'last_name_en',
+    'middle_name_en',
+    'maiden_name_en',
+    'sex',
+    'is_living',
+    'notes',
+    'primary_photo_id',
+    'deleted_at'
+  ],
   families: ['union_type', 'notes', 'deleted_at'],
   family_partners: ['family_id', 'person_id', 'sort_order', 'deleted_at'],
   family_children: ['family_id', 'person_id', 'pedigree', 'deleted_at'],

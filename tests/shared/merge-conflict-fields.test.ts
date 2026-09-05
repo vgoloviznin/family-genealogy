@@ -64,4 +64,29 @@ describe('merge-conflict-fields', () => {
     const remote = { ...local, notes: undefined };
     expect(getConflictFieldDiffs('people', local, remote)).toEqual([]);
   });
+
+  it('diffs English name columns', () => {
+    const local = {
+      id: 'p1',
+      first_name: 'Ann',
+      last_name: 'Smith',
+      middle_name: null,
+      maiden_name: null,
+      first_name_en: 'Ann',
+      last_name_en: 'Smith',
+      middle_name_en: null,
+      maiden_name_en: null,
+      sex: 'unknown',
+      is_living: 1,
+      notes: null,
+      primary_photo_id: null,
+      deleted_at: null
+    };
+    const remote = { ...local, first_name_en: 'Anne', last_name_en: 'Smyth' };
+    const diffs = getConflictFieldDiffs('people', local, remote);
+    expect(diffs).toEqual([
+      { column: 'first_name_en', local: 'Ann', remote: 'Anne' },
+      { column: 'last_name_en', local: 'Smith', remote: 'Smyth' }
+    ]);
+  });
 });

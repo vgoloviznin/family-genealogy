@@ -1,6 +1,6 @@
 import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const people = sqliteTable('people', {
   id: text('id').primaryKey(),
@@ -8,6 +8,10 @@ export const people = sqliteTable('people', {
   lastName: text('last_name').notNull(),
   middleName: text('middle_name'),
   maidenName: text('maiden_name'),
+  firstNameEn: text('first_name_en').notNull().default(''),
+  lastNameEn: text('last_name_en').notNull().default(''),
+  middleNameEn: text('middle_name_en'),
+  maidenNameEn: text('maiden_name_en'),
   sex: text('sex').notNull().default('unknown'),
   isLiving: integer('is_living', { mode: 'boolean' }).notNull().default(true),
   notes: text('notes'),

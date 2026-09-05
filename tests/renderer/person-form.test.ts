@@ -7,6 +7,8 @@ function basePerson(overrides: Partial<PersonDetail> = {}): PersonDetail {
     id: 'p1',
     firstName: 'Ivan',
     lastName: 'Ivanov',
+    firstNameEn: 'Ivan',
+    lastNameEn: 'Ivanov',
     sex: 'male',
     isLiving: true,
     createdAt: '2020-01-01T00:00:00.000Z',
@@ -29,6 +31,12 @@ describe('isPersonFormDirty', () => {
   it('detects field changes without JSON.stringify', () => {
     const a = buildFormFromPerson(basePerson());
     const b = { ...a, firstName: 'Petr' };
+    expect(isPersonFormDirty(a, b)).toBe(true);
+  });
+
+  it('detects English name field changes', () => {
+    const a = buildFormFromPerson(basePerson());
+    const b = { ...a, firstNameEn: 'John' };
     expect(isPersonFormDirty(a, b)).toBe(true);
   });
 

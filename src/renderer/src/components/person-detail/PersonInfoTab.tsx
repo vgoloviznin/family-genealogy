@@ -23,6 +23,27 @@ export function PersonInfoTab({ form, onChange, onSave }: Props) {
         <Field label={t('firstName')} value={form.firstName} placeholder={t('firstName')} onChange={(v) => onChange({ ...form, firstName: v })} />
         <Field label={t('middleName')} value={form.middleName} onChange={(v) => onChange({ ...form, middleName: v })} />
         {showMaidenName && <Field label={t('maidenName')} value={form.maidenName} onChange={(v) => onChange({ ...form, maidenName: v })} />}
+      </div>
+      <div className="mt-4">
+        <div className="text-sm font-medium text-stone-700 mb-2">{t('personDetail.namesEnSection')}</div>
+        <div className="grid grid-cols-2 gap-3">
+          <Field
+            label={t('lastNameEn')}
+            value={form.lastNameEn}
+            placeholder={t('lastNameEn')}
+            onChange={(v) => onChange({ ...form, lastNameEn: v })}
+          />
+          <Field
+            label={t('firstNameEn')}
+            value={form.firstNameEn}
+            placeholder={t('firstNameEn')}
+            onChange={(v) => onChange({ ...form, firstNameEn: v })}
+          />
+          <Field label={t('middleNameEn')} value={form.middleNameEn} onChange={(v) => onChange({ ...form, middleNameEn: v })} />
+          {showMaidenName && <Field label={t('maidenNameEn')} value={form.maidenNameEn} onChange={(v) => onChange({ ...form, maidenNameEn: v })} />}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 mt-4">
         <label className="text-sm font-medium text-stone-700">
           {t('sex')}
           <select

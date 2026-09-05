@@ -74,7 +74,7 @@ export async function getTree(personId?: string | null): Promise<TreeData> {
       allPersonIds,
       treeFamilies.flatMap((family) => family.children)
     ) ??
-    allPersonIds[0];
+    allPersonIds[0]!;
   const generations = assignGenerationsFromFocus(layoutFocus, allPersonIds, graph.partnerPairs, graph.parentPairs);
 
   const life = await loadLifeYears(allPersonIds);
@@ -85,7 +85,7 @@ export async function getTree(personId?: string | null): Promise<TreeData> {
     return {
       id,
       person: peopleById.get(id)!,
-      type: nodeType(userFocus, id, generation),
+      type: nodeType(layoutFocus, id, generation),
       generation
     };
   });
@@ -111,6 +111,7 @@ export async function getTree(personId?: string | null): Promise<TreeData> {
     nodes,
     edges,
     families: treeFamilies,
-    focusPersonId: userFocus
+    // Always a concrete person so the viewport can center without a UI selection.
+    focusPersonId: layoutFocus
   };
 }

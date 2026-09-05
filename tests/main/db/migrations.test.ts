@@ -43,9 +43,11 @@ describe.skipIf(!isSqliteAvailable())('migrations', () => {
       const sqlite = new Database(dbPath);
       runMigrations(sqlite);
       const versions = getAppliedMigrationVersions(sqlite);
-      expect(versions).toEqual([1, 2, 3].filter((v) => v <= SCHEMA_VERSION));
+      expect(versions).toEqual([1, 2, 3, 4].filter((v) => v <= SCHEMA_VERSION));
       const people = sqlite.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='people'`).get();
       expect(people).toBeTruthy();
+      const cols = sqlite.pragma('table_info(people)') as Array<{ name: string }>;
+      expect(cols.map((c) => c.name)).toEqual(expect.arrayContaining(['first_name_en', 'last_name_en', 'middle_name_en', 'maiden_name_en']));
       sqlite.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -61,9 +63,11 @@ describe.skipIf(!isSqliteAvailable())('migrations', () => {
         `CREATE TABLE people (id TEXT PRIMARY KEY, first_name TEXT NOT NULL, last_name TEXT NOT NULL, sex TEXT NOT NULL DEFAULT 'unknown', is_living INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`
       );
       runMigrations(sqlite);
-      expect(getAppliedMigrationVersions(sqlite)).toEqual([1, 2, 3].filter((v) => v <= SCHEMA_VERSION));
+      expect(getAppliedMigrationVersions(sqlite)).toEqual([1, 2, 3, 4].filter((v) => v <= SCHEMA_VERSION));
       const cols = sqlite.pragma('table_info(events)') as Array<{ name: string }>;
       expect(cols.some((c) => c.name === 'latitude')).toBe(true);
+      const peopleCols = sqlite.pragma('table_info(people)') as Array<{ name: string }>;
+      expect(peopleCols.some((c) => c.name === 'first_name_en')).toBe(true);
       sqlite.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });

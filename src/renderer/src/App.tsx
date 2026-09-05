@@ -1,5 +1,6 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { AppLocale } from '@shared/types';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ProjectPersonDetailPanel } from './components/ProjectPersonDetailPanel';
 import { PersonAvatar } from './components/PersonAvatar';
@@ -11,7 +12,7 @@ import { SyncHelpDialog } from './components/SyncHelpDialog';
 import { SettingsModal } from './components/SettingsModal';
 import { PromptDialog } from './components/PromptDialog';
 import { Toast } from './components/Toast';
-import { personLabel, formatLifeSpan } from './lib/labels';
+import { personLabel, personLabelEn, formatLifeSpan } from './lib/labels';
 import { needsOnboarding } from './lib/onboarding';
 import { useToast } from './hooks/useToast';
 import { useLocale } from './hooks/useLocale';
@@ -23,6 +24,33 @@ export default function App() {
   const { ready, locale, setLocale } = useLocale();
   const { toast, showToast } = useToast();
   const session = useProjectSession(showToast);
+  /** Ignore tree deselection shortly after a locale change (click-through / React Flow noise). */
+  const ignoreTreeDeselectUntilRef = useRef(0);
+
+  const changeLocale = useCallback(
+    async (next: AppLocale) => {
+      ignoreTreeDeselectUntilRef.current = Date.now() + 1000;
+      const s = await setLocale(next);
+      session.setSettings(s);
+      return s;
+    },
+    [setLocale, session.setSettings]
+  );
+
+  const selectTreePerson = useCallback(
+    (id: string | null) => {
+      if (id === null && (session.settingsOpen || Date.now() < ignoreTreeDeselectUntilRef.current)) {
+        return;
+      }
+      void session.flushThen(() => {
+        session.setSelectedId(id);
+        if (!id) {
+          session.setPersonDetail(null);
+        }
+      });
+    },
+    [session.flushThen, session.setSelectedId, session.setPersonDetail, session.settingsOpen]
+  );
 
   const refreshAfterSync = useCallback(async () => {
     await session.afterDataRefresh(session.view === 'tree');
@@ -66,7 +94,7 @@ export default function App() {
         <WelcomeScreen
           locale={locale}
           onLocaleChange={(next) => {
-            void setLocale(next).then((s) => session.setSettings(s));
+            void changeLocale(next);
           }}
           settings={session.settings}
           onboardingRequired={needsOnboarding(session.settings)}
@@ -145,6 +173,7 @@ export default function App() {
                       onClick={() => session.selectPerson(p.id)}
                     >
                       <div className="truncate">{personLabel(p)}</div>
+                      {personLabelEn(p) ? <div className="truncate text-xs text-stone-500 mt-0.5">{personLabelEn(p)}</div> : null}
                       <div className="text-xs text-stone-500 mt-0.5">{formatLifeSpan(p)}</div>
                     </button>
                   </li>
@@ -169,16 +198,11 @@ export default function App() {
                   </div>
                 ) : (
                   <TreeView
+                    locale={locale}
                     data={session.treeData}
                     selectedId={session.selectedId}
-                    onSelectPerson={(id) => {
-                      void session.flushThen(() => {
-                        session.setSelectedId(id);
-                        if (!id) {
-                          session.setPersonDetail(null);
-                        }
-                      });
-                    }}
+                    suppressDeselect={session.settingsOpen}
+                    onSelectPerson={selectTreePerson}
                   />
                 )
               ) : (
@@ -201,7 +225,7 @@ export default function App() {
           settings={session.settings}
           locale={locale}
           onLocaleChange={(next) => {
-            void setLocale(next).then((s) => session.setSettings(s));
+            void changeLocale(next);
           }}
           projectName={project.name}
           onClose={() => session.setSettingsOpen(false)}

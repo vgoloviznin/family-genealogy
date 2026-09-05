@@ -1,5 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
+import type { TFunction } from 'i18next';
 import {
   ReactFlow,
   Background,
@@ -12,7 +12,7 @@ import {
   type Node
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { TreeData, Person, TreeFamily, TreeNode } from '@shared/types';
+import type { AppLocale, TreeData, Person, TreeFamily, TreeNode } from '@shared/types';
 import i18n from '../i18n';
 import {
   layoutPedigreeTree,
@@ -27,12 +27,15 @@ import {
   type TreeLineSegment
 } from '@shared/tree-layout';
 import { defaultTreeFocusId } from '@shared/tree-graph';
-import { personLabel, personInitials, formatLifeSpan } from '../lib/labels';
+import { personLabel, personLabelEn, personInitials, formatLifeSpan } from '../lib/labels';
 
 interface Props {
+  locale: AppLocale;
   data: TreeData;
   selectedId: string | null;
   onSelectPerson: (id: string | null) => void;
+  /** When true (e.g. settings modal open), ignore Escape deselection. */
+  suppressDeselect?: boolean;
 }
 
 interface PersonNodeData {
@@ -41,6 +44,9 @@ interface PersonNodeData {
   isFocus: boolean;
   isSelected: boolean;
   hint: string | null;
+  lifeSpan: string;
+  emptyNameLabel: string;
+  locale: AppLocale;
   onSelect: (id: string) => void;
 }
 
@@ -60,9 +66,21 @@ function personHasName(person: Person): boolean {
   return [person.lastName, person.firstName, person.middleName].some((part) => part?.trim());
 }
 
-function CompactCard({ person, isFocus, isSelected }: { person: Person; isFocus: boolean; isSelected: boolean }) {
-  const { primary, secondary } = compactNameLines(person);
-  const displayPrimary = personHasName(person) ? primary : personLabel(person);
+function CompactCard({
+  person,
+  isFocus,
+  isSelected,
+  lifeSpan,
+  emptyNameLabel
+}: {
+  person: Person;
+  isFocus: boolean;
+  isSelected: boolean;
+  lifeSpan: string;
+  emptyNameLabel: string;
+}) {
+  const { primary, secondary, english } = compactNameLines(person, emptyNameLabel);
+  const displayPrimary = personHasName(person) ? primary : emptyNameLabel;
   return (
     <div
       className={`w-full h-full px-2 py-1.5 bg-white rounded-lg text-left flex gap-2 items-center transition-colors ${
@@ -73,20 +91,36 @@ function CompactCard({ person, isFocus, isSelected }: { person: Person; isFocus:
       <div className="min-w-0 flex-1">
         <div className="text-[12px] font-medium leading-[1.15] text-stone-900 whitespace-nowrap">{displayPrimary}</div>
         {secondary ? <div className="text-[11px] leading-[1.15] text-stone-800 whitespace-nowrap">{secondary}</div> : null}
-        <div className="text-[10px] tabular-nums text-stone-500 leading-tight mt-0.5 whitespace-nowrap">{formatLifeSpan(person)}</div>
+        {english ? <div className="text-[10px] leading-[1.15] text-stone-500 whitespace-nowrap">{english}</div> : null}
+        <div className="text-[10px] tabular-nums text-stone-500 leading-tight mt-0.5 whitespace-nowrap">{lifeSpan}</div>
       </div>
     </div>
   );
 }
 
-function ExpandedCard({ person, hint, cardWidth }: { person: Person; hint: string | null; cardWidth: number }) {
+function ExpandedCard({
+  person,
+  hint,
+  cardWidth,
+  lifeSpan,
+  emptyNameLabel
+}: {
+  person: Person;
+  hint: string | null;
+  cardWidth: number;
+  lifeSpan: string;
+  emptyNameLabel: string;
+}) {
+  const en = personLabelEn(person);
+  const title = personHasName(person) ? personLabel(person) : emptyNameLabel;
   return (
     <div className="px-2 py-1.5 bg-white rounded-lg border-2 border-stone-800 shadow-md text-left" style={{ width: cardWidth }}>
       <div className="flex gap-2 items-start">
         <TreeAvatar person={person} size="sm" />
         <div className="min-w-0 flex-1">
-          <div className="font-serif font-semibold text-[12px] leading-snug text-stone-900">{personLabel(person)}</div>
-          <div className="text-[10px] tabular-nums text-stone-500 mt-0.5">{formatLifeSpan(person)}</div>
+          <div className="font-serif font-semibold text-[12px] leading-snug text-stone-900">{title}</div>
+          {en ? <div className="text-[10px] leading-snug text-stone-500">{en}</div> : null}
+          <div className="text-[10px] tabular-nums text-stone-500 mt-0.5">{lifeSpan}</div>
           {hint ? <div className="text-[11px] text-stone-500 mt-1">{hint}</div> : null}
         </div>
       </div>
@@ -97,10 +131,22 @@ function ExpandedCard({ person, hint, cardWidth }: { person: Person; hint: strin
 function PersonNode({ data }: { data: PersonNodeData }) {
   return (
     <div className="relative cursor-pointer" style={{ width: data.cardWidth, height: PEDIGREE_CARD_H }} onClick={() => data.onSelect(data.person.id)}>
-      <CompactCard person={data.person} isFocus={data.isFocus} isSelected={data.isSelected} />
+      <CompactCard
+        person={data.person}
+        isFocus={data.isFocus}
+        isSelected={data.isSelected}
+        lifeSpan={data.lifeSpan}
+        emptyNameLabel={data.emptyNameLabel}
+      />
       {data.isSelected ? (
         <div className="absolute left-0 top-0 z-20 pointer-events-auto">
-          <ExpandedCard person={data.person} hint={data.hint} cardWidth={data.cardWidth} />
+          <ExpandedCard
+            person={data.person}
+            hint={data.hint}
+            cardWidth={data.cardWidth}
+            lifeSpan={data.lifeSpan}
+            emptyNameLabel={data.emptyNameLabel}
+          />
         </div>
       ) : null}
     </div>
@@ -129,9 +175,9 @@ function childCount(personId: string, families: TreeFamily[]): number {
   return count;
 }
 
-function relationHint(node: TreeNode, focusId: string | null, data: TreeData): string | null {
+function relationHint(t: TFunction, node: TreeNode, focusId: string | null, data: TreeData): string | null {
   const children = childCount(node.id, data.families);
-  const childPart = children > 0 ? i18n.t('treeHint.childCount', { count: children }) : null;
+  const childPart = children > 0 ? t('treeHint.childCount', { count: children }) : null;
 
   if (!focusId) {
     return childPart;
@@ -144,29 +190,29 @@ function relationHint(node: TreeNode, focusId: string | null, data: TreeData): s
     const isParent = data.edges.some((e) => e.kind === 'parent' && e.source === node.id && e.target === focusId);
     if (isParent) {
       if (node.person.sex === 'female') {
-        return childPart ? `${i18n.t('treeHint.mother')} · ${childPart}` : i18n.t('treeHint.mother');
+        return childPart ? `${t('treeHint.mother')} · ${childPart}` : t('treeHint.mother');
       }
       if (node.person.sex === 'male') {
-        return childPart ? `${i18n.t('treeHint.father')} · ${childPart}` : i18n.t('treeHint.father');
+        return childPart ? `${t('treeHint.father')} · ${childPart}` : t('treeHint.father');
       }
-      return childPart ? `${i18n.t('treeHint.parent')} · ${childPart}` : i18n.t('treeHint.parent');
+      return childPart ? `${t('treeHint.parent')} · ${childPart}` : t('treeHint.parent');
     }
-    return childPart ? `${i18n.t('treeHint.ancestor')} · ${childPart}` : i18n.t('treeHint.ancestor');
+    return childPart ? `${t('treeHint.ancestor')} · ${childPart}` : t('treeHint.ancestor');
   }
 
   if (node.type === 'descendant') {
     const isChild = data.edges.some((e) => e.kind === 'parent' && e.source === focusId && e.target === node.id);
     if (isChild) {
-      return childPart ? `${i18n.t('treeHint.child')} · ${childPart}` : i18n.t('treeHint.child');
+      return childPart ? `${t('treeHint.child')} · ${childPart}` : t('treeHint.child');
     }
-    return childPart ? `${i18n.t('treeHint.descendant')} · ${childPart}` : i18n.t('treeHint.descendant');
+    return childPart ? `${t('treeHint.descendant')} · ${childPart}` : t('treeHint.descendant');
   }
 
   const isPartner = data.edges.some(
     (e) => e.kind === 'partner' && ((e.source === focusId && e.target === node.id) || (e.target === focusId && e.source === node.id))
   );
   if (isPartner) {
-    return childPart ? `${i18n.t('treeHint.spouse')} · ${childPart}` : i18n.t('treeHint.spouse');
+    return childPart ? `${t('treeHint.spouse')} · ${childPart}` : t('treeHint.spouse');
   }
 
   return childPart;
@@ -219,11 +265,17 @@ function FocusViewport({ focusId }: { focusId: string | null }) {
   return null;
 }
 
-function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
-  const { i18n } = useTranslation();
-  const emptyNameLabel = i18n.t('enum.newPerson');
+function TreeCanvas({ locale, data, selectedId, onSelectPerson, suppressDeselect = false }: Props) {
+  const onSelectRef = useRef(onSelectPerson);
+  onSelectRef.current = onSelectPerson;
+  const stableSelect = useCallback((id: string) => {
+    onSelectRef.current(id);
+  }, []);
 
   const layout = useMemo(() => {
+    // getFixedT(locale) — явный язык карточек; useLocale ждёт changeLanguage до setState.
+    const t = i18n.getFixedT(locale);
+    const emptyNameLabel = t('enum.newPerson');
     const nodeIds = data.nodes.map((n) => n.id);
     const partnerPairs = extractPartnerPairs(data);
     const families = data.families ?? [];
@@ -238,6 +290,7 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
         nodeIds,
         families.flatMap((family) => family.children)
       ) ??
+      data.nodes[0]?.id ??
       undefined;
 
     const positions = layoutPedigreeTree({
@@ -278,18 +331,21 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
         data: {
           person: n.person,
           cardWidth,
-          isFocus: data.focusPersonId != null && n.id === data.focusPersonId,
+          isFocus: layoutFocus != null && n.id === layoutFocus,
           isSelected: n.id === selectedId,
-          hint: relationHint(n, data.focusPersonId, data),
-          onSelect: onSelectPerson
-        },
+          hint: relationHint(t, n, layoutFocus ?? null, data),
+          lifeSpan: formatLifeSpan(n.person, t),
+          emptyNameLabel,
+          locale,
+          onSelect: stableSelect
+        } satisfies PersonNodeData,
         draggable: false,
-        style: { width: cardWidth, zIndex: n.id === selectedId ? 30 : data.focusPersonId === n.id ? 10 : 2 }
+        style: { width: cardWidth, zIndex: n.id === selectedId ? 30 : layoutFocus === n.id ? 10 : 2 }
       };
     });
 
-    return { nodes, lineSegments };
-  }, [data, selectedId, onSelectPerson, emptyNameLabel, i18n.language]);
+    return { nodes, lineSegments, viewportFocusId: layoutFocus ?? null };
+  }, [locale, data, selectedId, stableSelect]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layout.nodes);
   const [edges, , onEdgesChange] = useEdgesState([]);
@@ -300,13 +356,16 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (suppressDeselect) {
+        return;
+      }
       if (e.key === 'Escape' && selectedId) {
         onSelectPerson(null);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedId, onSelectPerson]);
+  }, [selectedId, onSelectPerson, suppressDeselect]);
 
   return (
     <div className="h-full w-full bg-[#f4f1eb] rounded-lg border border-stone-200 tree-view">
@@ -316,11 +375,6 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={(_, node) => onSelectPerson(node.id)}
-        onPaneClick={() => {
-          if (selectedId) {
-            onSelectPerson(null);
-          }
-        }}
         nodeTypes={nodeTypes}
         minZoom={0.2}
         maxZoom={2}
@@ -331,7 +385,7 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
         <RelationshipLayer segments={layout.lineSegments} />
         <Background color="#a8a29e" gap={24} size={1} />
         <Controls showInteractive={false} className="tree-controls" />
-        <FocusViewport focusId={data.focusPersonId} />
+        <FocusViewport focusId={layout.viewportFocusId} />
       </ReactFlow>
     </div>
   );
@@ -340,7 +394,8 @@ function TreeCanvas({ data, selectedId, onSelectPerson }: Props) {
 export function TreeView(props: Props) {
   return (
     <ReactFlowProvider>
-      <TreeCanvas {...props} />
+      {/* Remount canvas on locale so React Flow rebuilds memoized node labels. */}
+      <TreeCanvas key={props.locale} {...props} />
     </ReactFlowProvider>
   );
 }

@@ -40,6 +40,30 @@ describe('estimatePedigreeCardWidth', () => {
     const width = estimatePedigreeCardWidth(compactNameLines({ firstName: 'Всеволод', lastName: 'Головизнин', middleName: 'Александрович' }));
     expect(width).toBeGreaterThan(PEDIGREE_NODE_MIN_W);
   });
+
+  it('accounts for English name line width', () => {
+    const withoutEn = estimatePedigreeCardWidth(compactNameLines({ firstName: 'И.', lastName: 'И.', firstNameEn: '', lastNameEn: '' }));
+    const withEn = estimatePedigreeCardWidth(
+      compactNameLines({
+        firstName: 'И.',
+        lastName: 'И.',
+        firstNameEn: 'Vsevolod',
+        lastNameEn: 'Goloviznin',
+        middleNameEn: 'Alexandrovich'
+      })
+    );
+    expect(withEn).toBeGreaterThan(withoutEn);
+  });
+
+  it('exposes english line from compactNameLines', () => {
+    const lines = compactNameLines({
+      firstName: 'Иван',
+      lastName: 'Иванов',
+      firstNameEn: 'Ivan',
+      lastNameEn: 'Ivanov'
+    });
+    expect(lines.english).toBe('Ivanov Ivan');
+  });
 });
 
 describe('assignLayoutGenerations', () => {

@@ -130,7 +130,11 @@ export async function searchPeople(query: string): Promise<Person[]> {
           like(sql`lower(${schema.people.firstName})`, q),
           like(sql`lower(${schema.people.lastName})`, q),
           like(sql`lower(${schema.people.middleName})`, q),
-          like(sql`lower(${schema.people.maidenName})`, q)
+          like(sql`lower(${schema.people.maidenName})`, q),
+          like(sql`lower(${schema.people.firstNameEn})`, q),
+          like(sql`lower(${schema.people.lastNameEn})`, q),
+          like(sql`lower(${schema.people.middleNameEn})`, q),
+          like(sql`lower(${schema.people.maidenNameEn})`, q)
         )
       )
     );
@@ -151,6 +155,10 @@ export async function createPerson(input: CreatePersonInput): Promise<PersonDeta
       lastName: input.lastName.trim(),
       middleName: input.middleName?.trim() || null,
       maidenName: input.maidenName?.trim() || null,
+      firstNameEn: input.firstNameEn?.trim() || '',
+      lastNameEn: input.lastNameEn?.trim() || '',
+      middleNameEn: input.middleNameEn?.trim() || null,
+      maidenNameEn: input.maidenNameEn?.trim() || null,
       sex: input.sex ?? 'unknown',
       isLiving: input.isLiving ?? true,
       notes: input.notes?.trim() || null,
@@ -223,6 +231,10 @@ export async function updatePerson(input: UpdatePersonInput): Promise<PersonDeta
         lastName: input.lastName?.trim(),
         middleName: input.middleName?.trim() || null,
         maidenName: input.maidenName?.trim() || null,
+        ...(input.firstNameEn !== undefined ? { firstNameEn: input.firstNameEn.trim() || '' } : {}),
+        ...(input.lastNameEn !== undefined ? { lastNameEn: input.lastNameEn.trim() || '' } : {}),
+        ...(input.middleNameEn !== undefined ? { middleNameEn: input.middleNameEn.trim() || null } : {}),
+        ...(input.maidenNameEn !== undefined ? { maidenNameEn: input.maidenNameEn.trim() || null } : {}),
         sex: input.sex,
         isLiving: input.isLiving,
         notes: input.notes?.trim() || null,

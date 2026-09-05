@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import i18n from '@renderer/i18n';
-import { formatDate, formatLifeSpan, deceasedLabel, personLabel, siblingLabel, spouseLabel, eventTypeLabel } from '@renderer/lib/labels';
+import {
+  formatDate,
+  formatLifeSpan,
+  deceasedLabel,
+  personLabel,
+  personLabelEn,
+  siblingLabel,
+  spouseLabel,
+  eventTypeLabel
+} from '@renderer/lib/labels';
 
 beforeEach(async () => {
   await i18n.changeLanguage('ru');
@@ -19,6 +28,22 @@ describe('personLabel', () => {
 
   it('returns fallback for empty name', () => {
     expect(personLabel({ lastName: '', firstName: '' })).toBe('Новый человек');
+  });
+});
+
+describe('personLabelEn', () => {
+  it('joins English name parts in the same order', () => {
+    expect(
+      personLabelEn({
+        lastNameEn: 'Ivanov',
+        firstNameEn: 'Ivan',
+        middleNameEn: 'Petrovich'
+      })
+    ).toBe('Ivanov Ivan Petrovich');
+  });
+
+  it('returns empty string when English name is missing', () => {
+    expect(personLabelEn({ lastNameEn: '', firstNameEn: '' })).toBe('');
   });
 });
 
