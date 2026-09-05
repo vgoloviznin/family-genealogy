@@ -12,6 +12,7 @@ Desktop-приложение для ведения семейного архив
 
 - **Default branch — `main`**. Прямой push запрещён (ruleset): только PR → зелёный CI (`lint-test`) → merge. Force-push и удаление `main` запрещены.
 - Фичи/фиксы: ветка `feat/…` или `fix/…` → PR в `main`. Не коммитить в `main` напрямую.
+- **После merge в `main`** — удалять смерженную ветку на remote (`gh pr merge --delete-branch` или удалить вручную) и локально (`git branch -d …`, `git fetch --prune`), чтобы не копить мусор.
 - **Релизы установщиков** — только по git-тегу `v*` (например `v0.2.0`). Не публиковать артефакты на каждый merge в `main`.
 - Порядок релиза:
   1. PR с бампом `"version"` в `package.json` (и `package-lock.json`) → merge в `main`.
