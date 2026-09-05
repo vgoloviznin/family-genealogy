@@ -73,7 +73,7 @@
     "vitest": "3.2.7"
   },
   "overrides": {
-    "@electron/asar": "4.3.0",
+    "@electron/asar": "4.1.1",
     "@electron/get": "5.0.0",
     "@esbuild-kit/core-utils": {
       "esbuild": "0.25.5"
