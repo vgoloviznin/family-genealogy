@@ -6,7 +6,7 @@
 
 Desktop-приложение для ведения семейного архива: люди, семейные связи, события, источники/цитаты, медиа, дерево предков/потомков. Данные хранятся **локально** в папке проекта.
 
-**Remote не используется** — репозиторий и проекты работают только локально, без обязательного git push.
+Репозиторий: [vgoloviznin/family-genealogy](https://github.com/vgoloviznin/family-genealogy). Default branch — **`main`**. Изменения — через PR; CI (`lint` + `test`) обязателен. Релизы установщиков — только по тегу `v*` (см. README «Как выпустить версию»); артефакты на GitHub Releases.
 
 ## Стек
 
@@ -73,9 +73,11 @@ npm install
 npm run dev          # разработка
 npm run build        # сборка
 npm run test         # unit-тесты (vitest)
-npm run build:mac    # dmg для macOS
-npm run build:win    # NSIS для Windows
+npm run build:mac    # dmg для macOS arm64 (ad-hoc identity)
+npm run build:win    # NSIS для Windows x64
 ```
+
+Node 20+ (`.nvmrc`). GitHub Actions: `.github/workflows/ci.yml` (PR/`main`), `.github/workflows/release.yml` (теги `v*`).
 
 ## Формат проекта
 

@@ -100,15 +100,22 @@
     ],
     "mac": {
       "icon": "build/icon.icns",
+      "identity": "-",
       "target": [
-        "dmg"
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        }
       ],
       "category": "public.app-category.productivity"
     },
     "win": {
       "icon": "build/icon.ico",
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
       ]
     },
     "fileAssociations": [

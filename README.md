@@ -16,10 +16,22 @@ Desktop-приложение для ведения семейного архив
 - **Синхронизация** локальных копий одного проекта через `.fgtree` (merge одного или нескольких архивов)
 - Отмена последних действий (до 5 шагов)
 
-## Требования
+## Скачать
 
-- **Node.js** 20+
-- **macOS** (Apple Silicon / Intel) или **Windows** для сборки соответствующей платформы
+Готовые установщики публикуются в [GitHub Releases](https://github.com/vgoloviznin/family-genealogy/releases):
+
+- **macOS Apple Silicon:** `*-arm64.dmg`
+- **Windows x64:** `*Setup*.exe`
+
+Сборки **не подписаны** (ad-hoc на macOS):
+
+- **macOS:** Gatekeeper предупредит о неидентифицированном разработчике. На macOS 15+ откройте **Системные настройки → Конфиденциальность и безопасность** и разрешите запуск; либо снимите quarantine: `xattr -cr "/Applications/Family Genealogy.app"`.
+- **Windows:** SmartScreen → «Подробнее» → «Выполнить в любом случае».
+
+## Требования (разработка)
+
+- **Node.js** 20+ (см. `.nvmrc`)
+- **macOS** (Apple Silicon) или **Windows** x64 для локальной сборки соответствующей платформы
 
 ## Быстрый старт
 
@@ -32,18 +44,25 @@ npm run dev
 
 ## Сборка
 
+Локально:
+
 ```bash
-# macOS (.dmg)
+# macOS arm64 (.dmg)
 npm run build:mac
 
-# Windows (NSIS)
+# Windows x64 (NSIS)
 npm run build:win
 ```
 
-Артефакты — в каталоге `release/`. Сборки **не подписаны**:
+Артефакты — в каталоге `release/`. CI собирает те же цели по git-тегу `v*` (см. ниже).
 
-- **macOS:** при предупреждении Gatekeeper — ПКМ по приложению → «Открыть», либо `xattr -cr "/Applications/Family Genealogy.app"`.
-- **Windows:** SmartScreen → «Подробнее» → «Выполнить в любом случае».
+## Как выпустить версию
+
+1. Ветка с бампом `"version"` в `package.json` → PR в `main` → зелёный CI → merge.
+2. На SHA merge: `git tag vX.Y.Z && git push origin vX.Y.Z` (номер тега без `v` = `version` в `package.json`).
+3. Workflow **Release** соберёт DMG (macOS arm64) и NSIS (Windows x64) и создаст GitHub Release с артефактами.
+
+Фичи и фиксы — только через PR в `main` (прямые push в `main` запрещены ruleset’ом).
 
 ## Разработка
 
@@ -55,7 +74,7 @@ npm run lint:fix   # автоисправление
 npm run format      # форматирование через Prettier
 ```
 
-Версии зависимостей в `package.json` зафиксированы без `^`/`~`.
+Версии зависимостей в `package.json` зафиксированы без `^`/`~`. CI на PR: lint + test.
 
 ## Формат данных
 
