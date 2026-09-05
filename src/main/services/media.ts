@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, unlinkSync } from 'fs';
-import { join, extname, basename } from 'path';
+import { copyFileSync, createReadStream, existsSync, mkdirSync, statSync, unlinkSync } from 'fs';
+import { join, extname, basename, resolve, sep } from 'path';
 import { dialog, shell } from 'electron';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
 import sharp from 'sharp';
@@ -9,14 +9,33 @@ import * as schema from '../db/schema';
 import { newId, nowIso } from '../utils/id';
 import { getDeviceMeta } from './settings';
 import { requireProject } from './project';
-import { getAppLocale, t } from '../i18n';
+import { getAppLocale, localizedError, t } from '../i18n';
+import { logError } from '../utils/log';
 import type { MediaItem } from '@shared/types';
 
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+export const MAX_MEDIA_BYTES = 50 * 1024 * 1024;
 
-function hashFile(path: string): string {
-  const data = readFileSync(path);
-  return createHash('sha256').update(data).digest('hex');
+export function isPathInsideRoot(root: string, candidate: string): boolean {
+  const base = resolve(root);
+  const full = resolve(candidate);
+  return full === base || full.startsWith(base + sep);
+}
+
+export function assertMediaFileSize(size: number): void {
+  if (size > MAX_MEDIA_BYTES) {
+    throw new Error(localizedError('errors.mediaTooLarge', { maxMb: 50 }));
+  }
+}
+
+function hashFile(path: string): Promise<string> {
+  return new Promise((resolveHash, reject) => {
+    const hash = createHash('sha256');
+    const stream = createReadStream(path);
+    stream.on('data', (d) => hash.update(d));
+    stream.on('end', () => resolveHash(hash.digest('hex')));
+    stream.on('error', reject);
+  });
 }
 
 function mimeFromExt(ext: string): string {
@@ -133,18 +152,33 @@ export async function addMedia(target: {
 
   const items: MediaItem[] = [];
   let primarySet = false;
+  let skippedTooLarge = 0;
+  const tooLargeMessage = localizedError('errors.mediaTooLarge', { maxMb: 50 });
 
   for (const sourcePath of result.filePaths) {
-    const item = await importMediaFile(sourcePath, target);
-    if (!item) {
-      continue;
+    try {
+      const item = await importMediaFile(sourcePath, target);
+      if (!item) {
+        continue;
+      }
+      if (target.setPrimary && target.personId && !primarySet && IMAGE_TYPES.has(item.mimeType)) {
+        await setPrimaryPhoto(target.personId, item.id);
+        item.isPrimary = true;
+        primarySet = true;
+      }
+      items.push(item);
+    } catch (err) {
+      if (err instanceof Error && err.message === tooLargeMessage) {
+        skippedTooLarge += 1;
+        logError('media.tooLarge', { path: sourcePath });
+        continue;
+      }
+      throw err;
     }
-    if (target.setPrimary && target.personId && !primarySet && IMAGE_TYPES.has(item.mimeType)) {
-      await setPrimaryPhoto(target.personId, item.id);
-      item.isPrimary = true;
-      primarySet = true;
-    }
-    items.push(item);
+  }
+
+  if (items.length === 0 && skippedTooLarge > 0) {
+    throw new Error(tooLargeMessage);
   }
 
   return items;
@@ -155,14 +189,15 @@ async function importMediaFile(sourcePath: string, target: { personId?: string; 
   const meta = getDeviceMeta();
   const ts = nowIso();
   const id = newId();
+  const fileStat = statSync(sourcePath);
+  assertMediaFileSize(fileStat.size);
   const ext = extname(sourcePath) || '.bin';
   const relativePath = join('media', `${id}${ext}`);
   const destPath = join(project.path, relativePath);
   mkdirSync(join(project.path, 'media'), { recursive: true });
   copyFileSync(sourcePath, destPath);
 
-  const contentHash = hashFile(destPath);
-  const stat = readFileSync(destPath);
+  const contentHash = await hashFile(destPath);
   const mimeType = mimeFromExt(ext);
 
   let thumbRelativePath: string | null = null;
@@ -184,7 +219,7 @@ async function importMediaFile(sourcePath: string, target: { personId?: string; 
     fileName: basename(sourcePath),
     mimeType,
     contentHash,
-    fileSize: stat.length,
+    fileSize: fileStat.size,
     thumbRelativePath,
     createdAt: ts,
     updatedAt: ts,
@@ -207,7 +242,6 @@ async function importMediaFile(sourcePath: string, target: { personId?: string; 
 
 export async function deleteMedia(id: string): Promise<void> {
   const db = getDatabase();
-  const project = requireProject();
   const ts = nowIso();
 
   const links = await db
@@ -228,9 +262,9 @@ export async function deleteMedia(id: string): Promise<void> {
     const [asset] = await db.select().from(schema.mediaAssets).where(eq(schema.mediaAssets.id, id));
     if (asset) {
       await db.update(schema.mediaAssets).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.mediaAssets.id, id));
-      const filePath = join(project.path, asset.relativePath);
-      const thumbPath = asset.thumbRelativePath ? join(project.path, asset.thumbRelativePath) : null;
-      if (existsSync(filePath)) {
+      const filePath = resolveProjectRelativePath(asset.relativePath);
+      const thumbPath = asset.thumbRelativePath ? resolveProjectRelativePath(asset.thumbRelativePath) : null;
+      if (filePath && existsSync(filePath)) {
         unlinkSync(filePath);
       }
       if (thumbPath && existsSync(thumbPath)) {
@@ -248,30 +282,34 @@ export async function setPrimaryPhoto(personId: string, mediaId: string): Promis
 
 export async function openMedia(id: string): Promise<void> {
   const db = getDatabase();
-  const project = requireProject();
   const [asset] = await db.select().from(schema.mediaAssets).where(eq(schema.mediaAssets.id, id));
   if (!asset) {
     return;
   }
-  const filePath = join(project.path, asset.relativePath);
-  if (existsSync(filePath)) {
+  const filePath = resolveProjectRelativePath(asset.relativePath);
+  if (filePath && existsSync(filePath)) {
     await shell.openPath(filePath);
   }
 }
 
-export function resolveMediaPath(relativePath: string): string | null {
+function resolveProjectRelativePath(relativePath: string): string | null {
   try {
     const project = requireProject();
-    const decoded = decodeURIComponent(relativePath);
-    const full = join(project.path, decoded);
-    if (!full.startsWith(project.path)) {
-      return null;
-    }
-    if (!existsSync(full)) {
+    const root = resolve(project.path);
+    const full = resolve(project.path, relativePath);
+    if (!isPathInsideRoot(root, full)) {
       return null;
     }
     return full;
   } catch {
     return null;
   }
+}
+
+export function resolveMediaPath(relativePath: string): string | null {
+  const full = resolveProjectRelativePath(relativePath);
+  if (!full || !existsSync(full)) {
+    return null;
+  }
+  return full;
 }

@@ -51,10 +51,15 @@
   "backup": "Бэкап",
   "restore": "Восстановить",
   "backupFolder": "Папка бэкапов",
-  "backupFolderPlaceholder": "По умолчанию: Backups в папке проекта",
+  "backupFolderPlaceholder": "По умолчанию: папка Backups в данных приложения",
   "backupOnQuit": "Бэкап при выходе",
   "backupKeepCount": "Хранить копий",
   "editorLabel": "Подпись редактора",
+  "onboardingTitle": "Добро пожаловать",
+  "onboardingSubtitle": "Укажите язык, имя редактора и папку для резервных копий",
+  "onboardingContinue": "Продолжить",
+  "editorLabelRequired": "Укажите имя редактора",
+  "backupFolderRequired": "Укажите папку для бэкапов",
   "avatar": {
     "changePhoto": "Сменить фото",
     "addPhoto": "Добавить фото",
@@ -63,7 +68,8 @@
   },
   "toast": {
     "exportDone": "Экспорт: {{path}}",
-    "backupDone": "Бэкап: {{path}}"
+    "backupDone": "Бэкап: {{path}}",
+    "diagnosticsCopied": "Диагностика скопирована в буфер обмена"
   },
   "mergeBatchPreviewNote": "Для оценки следующих архивов неразрешённые конфликты временно считались как „из архива“.",
   "place": "Место",
@@ -135,6 +141,8 @@
     "emptyFamily": "Семейные связи пока не добавлены.",
     "newPartner": "Новый супруг(а)",
     "newChild": "Новый ребёнок",
+    "chooseUnionForChild": "Союз для ребёнка…",
+    "newUnionForChild": "Новый союз",
     "newParent": "Новый родитель",
     "newSibling": "Новый брат/сестра",
     "linkExisting": "Связать существующего",
@@ -365,6 +373,7 @@
     "view": "Вид",
     "help": "Справка",
     "syncHelp": "Как синхронизироваться…",
+    "copyDiagnostics": "Скопировать диагностику",
     "cut": "Вырезать",
     "copy": "Копировать",
     "paste": "Вставить",
@@ -389,7 +398,7 @@
     "addFiles": "Добавить файлы",
     "imagesFilter": "Изображения",
     "allFilesFilter": "Все файлы",
-    "fgtreeFilter": "Архив Family Geneology"
+    "fgtreeFilter": "Архив Family Genealogy"
   },
   "progress": {
     "unpackingArchive": "Распаковка архива…",
@@ -405,9 +414,17 @@
   "errors": {
     "cancelled": "Отменено",
     "folderNotEmpty": "Папка не пуста. Выберите пустую папку или создайте новую.",
-    "notAProject": "В папке нет project.json — это не проект Family Geneology.",
+    "notAProject": "В папке нет project.json — это не проект Family Genealogy.",
     "projectNotOpen": "Проект не открыт",
     "projectNameEmpty": "Название проекта не может быть пустым",
+    "projectNewerVersion": "Проект создан в более новой версии приложения",
+    "databaseMissing": "В папке проекта нет family.sqlite",
+    "databaseNewerVersion": "База данных создана в более новой версии приложения",
+    "copyDiagnosticsFailed": "Не удалось скопировать диагностику",
+    "familyChoiceRequired": "Выберите союз для ребёнка",
+    "mediaTooLarge": "Файл слишком большой (макс. {{maxMb}} МБ)",
+    "invalidIpcArgument": "Некорректный аргумент IPC: {{label}}",
+    "onboardingRequired": "Сначала укажите имя редактора и папку для бэкапов",
     "invalidArchiveNoManifest": "Неверный файл: нет manifest.json",
     "invalidArchiveFormat": "Неверный формат архива",
     "dbHashMismatch": "Контрольная сумма базы данных не совпадает",

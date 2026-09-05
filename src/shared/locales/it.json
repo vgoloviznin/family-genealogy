@@ -51,10 +51,15 @@
   "backup": "Backup",
   "restore": "Ripristina",
   "backupFolder": "Cartella backup",
-  "backupFolderPlaceholder": "Predefinito: cartella Backups nel progetto",
+  "backupFolderPlaceholder": "Predefinito: cartella Backups nei dati dell'app",
   "backupOnQuit": "Backup all'uscita",
   "backupKeepCount": "Conserva copie",
   "editorLabel": "Etichetta editor",
+  "onboardingTitle": "Benvenuto",
+  "onboardingSubtitle": "Scegli lingua, etichetta editor e cartella dei backup",
+  "onboardingContinue": "Continua",
+  "editorLabelRequired": "Inserisci l'etichetta editor",
+  "backupFolderRequired": "Scegli la cartella dei backup",
   "avatar": {
     "changePhoto": "Cambia foto",
     "addPhoto": "Aggiungi foto",
@@ -63,7 +68,8 @@
   },
   "toast": {
     "exportDone": "Esportazione: {{path}}",
-    "backupDone": "Backup: {{path}}"
+    "backupDone": "Backup: {{path}}",
+    "diagnosticsCopied": "Diagnostica copiata negli appunti"
   },
   "mergeBatchPreviewNote": "Per valutare gli archivi successivi, i conflitti non risolti sono stati trattati temporaneamente come dall'archivio.",
   "place": "Luogo",
@@ -135,6 +141,8 @@
     "emptyFamily": "Nessun legame familiare aggiunto.",
     "newPartner": "Nuovo coniuge",
     "newChild": "Nuovo figlio",
+    "chooseUnionForChild": "Unione per il figlio…",
+    "newUnionForChild": "Nuova unione",
     "newParent": "Nuovo genitore",
     "newSibling": "Nuovo fratello/sorella",
     "linkExisting": "Collega esistente",
@@ -365,6 +373,7 @@
     "view": "Visualizza",
     "help": "Aiuto",
     "syncHelp": "Come sincronizzarsi…",
+    "copyDiagnostics": "Copia diagnostica",
     "cut": "Taglia",
     "copy": "Copia",
     "paste": "Incolla",
@@ -389,7 +398,7 @@
     "addFiles": "Aggiungi file",
     "imagesFilter": "Immagini",
     "allFilesFilter": "Tutti i file",
-    "fgtreeFilter": "Archivio Family Geneology"
+    "fgtreeFilter": "Archivio Family Genealogy"
   },
   "progress": {
     "unpackingArchive": "Estrazione archivio…",
@@ -405,9 +414,17 @@
   "errors": {
     "cancelled": "Annullato",
     "folderNotEmpty": "La cartella non è vuota. Scegli una cartella vuota o creane una nuova.",
-    "notAProject": "Nessun project.json nella cartella — non è un progetto Family Geneology.",
+    "notAProject": "Nessun project.json nella cartella — non è un progetto Family Genealogy.",
     "projectNotOpen": "Nessun progetto aperto",
     "projectNameEmpty": "Il nome del progetto non può essere vuoto",
+    "projectNewerVersion": "Il progetto è stato creato in una versione più recente dell'app",
+    "databaseMissing": "Nella cartella del progetto manca family.sqlite",
+    "databaseNewerVersion": "Il database è stato creato in una versione più recente dell'app",
+    "copyDiagnosticsFailed": "Impossibile copiare la diagnostica",
+    "familyChoiceRequired": "Scegli l'unione per il figlio",
+    "mediaTooLarge": "File troppo grande (max {{maxMb}} MB)",
+    "invalidIpcArgument": "Argomento IPC non valido: {{label}}",
+    "onboardingRequired": "Imposta prima etichetta editor e cartella backup",
     "invalidArchiveNoManifest": "File non valido: nessun manifest.json",
     "invalidArchiveFormat": "Formato archivio non valido",
     "dbHashMismatch": "Il checksum del database non corrisponde",

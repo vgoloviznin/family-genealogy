@@ -4,7 +4,7 @@ import type { Person, PersonDetail, UpdatePersonInput } from '@shared/types';
 import { parseCoordinates } from '@shared/coordinates';
 import { PersonAvatar } from './PersonAvatar';
 import { personLabel, formatLifeSpan } from '../lib/labels';
-import { buildFormFromPerson, snapshotPerson, type PersonFormState } from './person-detail/helpers';
+import { buildFormFromPerson, isPersonFormDirty, type PersonFormState } from './person-detail/helpers';
 import { DangerBtn } from './person-detail/ui';
 import { PersonInfoTab } from './person-detail/PersonInfoTab';
 import { PersonFamilyTab } from './person-detail/PersonFamilyTab';
@@ -40,24 +40,23 @@ export function PersonDetailPanel({
   const [tab, setTab] = useState<'info' | 'family' | 'events' | 'associations' | 'media' | 'sources'>('info');
   const [form, setForm] = useState<PersonFormState>(() => buildFormFromPerson(person));
   const [saveError, setSaveError] = useState('');
-  const [lastSaved, setLastSaved] = useState(() => JSON.stringify(buildFormFromPerson(person)));
+  const [lastSavedForm, setLastSavedForm] = useState<PersonFormState>(() => buildFormFromPerson(person));
   const formRef = useRef(form);
-  const lastSavedRef = useRef(lastSaved);
+  const lastSavedFormRef = useRef(lastSavedForm);
   const personRef = useRef(person);
   const savingRef = useRef<Promise<boolean> | null>(null);
   formRef.current = form;
-  lastSavedRef.current = lastSaved;
+  lastSavedFormRef.current = lastSavedForm;
   personRef.current = person;
 
   useEffect(() => {
     const next = buildFormFromPerson(person);
     setForm(next);
-    setLastSaved(JSON.stringify(next));
+    setLastSavedForm(next);
     setSaveError('');
   }, [person.id]);
 
-  const dirty = JSON.stringify(form) !== lastSaved;
-
+  const dirty = isPersonFormDirty(form, lastSavedForm);
   useEffect(() => {
     onDirtyChange(dirty);
   }, [dirty, onDirtyChange]);
@@ -66,14 +65,13 @@ export function PersonDetailPanel({
     async (mode: 'manual' | 'auto'): Promise<boolean> => {
       if (savingRef.current) {
         const previous = await savingRef.current;
-        if (JSON.stringify(formRef.current) === lastSavedRef.current) {
+        if (!isPersonFormDirty(formRef.current, lastSavedFormRef.current)) {
           return previous;
         }
       }
       const run = (async () => {
         const current = formRef.current;
-        const snapshot = JSON.stringify(current);
-        if (snapshot === lastSavedRef.current) {
+        if (!isPersonFormDirty(current, lastSavedFormRef.current)) {
           return true;
         }
         if (!current.firstName.trim() && !current.lastName.trim()) {
@@ -89,9 +87,6 @@ export function PersonDetailPanel({
         }
         setSaveError('');
         const p = personRef.current;
-        if (mode === 'manual') {
-          await window.api.undo.push({ type: 'person-update', before: snapshotPerson(p) });
-        }
         await onSave({
           id: p.id,
           firstName: current.firstName,
@@ -119,8 +114,8 @@ export function PersonDetailPanel({
                 }
               })
         });
-        lastSavedRef.current = snapshot;
-        setLastSaved(snapshot);
+        lastSavedFormRef.current = current;
+        setLastSavedForm(current);
         onDirtyChange(false);
         onSaveNotice(mode === 'auto' ? t('personDetail.savedAuto') : t('personDetail.saved'));
         await onRefresh();
@@ -166,7 +161,6 @@ export function PersonDetailPanel({
     if (!confirmed) {
       return;
     }
-    await window.api.undo.push({ type: 'person-undelete', id: person.id });
     await window.api.people.delete(person.id);
     onDeleted();
   };
@@ -226,7 +220,7 @@ export function PersonDetailPanel({
           />
         )}
 
-        {tab === 'events' && <PersonEventsTab person={person} onRefresh={onRefresh} />}
+        {tab === 'events' && <PersonEventsTab person={person} onRefresh={onRefresh} onError={(message) => setSaveError(message)} />}
 
         {tab === 'associations' && (
           <PersonAssociationsTab person={person} otherPeople={otherPeople} onSelectPerson={onSelectPerson} onRefresh={onRefresh} />

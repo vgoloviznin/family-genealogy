@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { AppLocale, RecentProject } from '@shared/types';
+import type { AppLocale, AppSettings, RecentProject } from '@shared/types';
 import { normalizeRecentProjects } from '@shared/recents';
 import { LocaleSelect } from './LocaleSelect';
+import { canCompleteOnboarding } from '../lib/onboarding';
 
 interface Props {
   locale: AppLocale;
   onLocaleChange: (locale: AppLocale) => void;
+  settings: AppSettings | null;
+  onboardingRequired: boolean;
+  onCompleteOnboarding: (partial: Partial<AppSettings>) => Promise<void>;
   recents: RecentProject[];
   onCreate: (name: string) => void;
   onOpen: () => void;
@@ -14,17 +18,112 @@ interface Props {
   onOpenRecent: (path: string) => void;
 }
 
-export function WelcomeScreen({ locale, onLocaleChange, recents, onCreate, onOpen, onImport, onOpenRecent }: Props) {
+export function WelcomeScreen({
+  locale,
+  onLocaleChange,
+  settings,
+  onboardingRequired,
+  onCompleteOnboarding,
+  recents,
+  onCreate,
+  onOpen,
+  onImport,
+  onOpenRecent
+}: Props) {
   const { t } = useTranslation();
   const [name, setName] = useState(t('defaultProjectName'));
   const nameEdited = useRef(false);
   const items = normalizeRecentProjects(recents);
+  const [editorLabel, setEditorLabel] = useState(settings?.editorLabel ?? '');
+  const [backupFolder, setBackupFolder] = useState(settings?.backupFolder ?? '');
+  const [onboardingError, setOnboardingError] = useState('');
 
   useEffect(() => {
     if (!nameEdited.current) {
       setName(t('defaultProjectName'));
     }
   }, [t]);
+
+  useEffect(() => {
+    setEditorLabel(settings?.editorLabel ?? '');
+    setBackupFolder(settings?.backupFolder ?? '');
+  }, [settings?.editorLabel, settings?.backupFolder]);
+
+  useEffect(() => {
+    if (settings?.backupFolder?.trim()) {
+      return;
+    }
+    void window.api.settings.getDefaultBackupFolder().then((folder) => {
+      setBackupFolder((current) => current || folder);
+    });
+  }, [settings?.backupFolder]);
+
+  if (onboardingRequired) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#f4f1eb] to-[#e8e0d4] p-8">
+        <div className="max-w-lg w-full bg-white/90 rounded-2xl shadow-lg p-8 border border-stone-200 space-y-4">
+          <h1 className="text-3xl font-serif text-stone-800">{t('onboardingTitle')}</h1>
+          <p className="text-stone-500">{t('onboardingSubtitle')}</p>
+          <LocaleSelect value={locale} onChange={onLocaleChange} />
+          <label className="block text-sm text-stone-600">
+            {t('editorLabel')}
+            <input
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 mt-1"
+              value={editorLabel}
+              onChange={(e) => setEditorLabel(e.target.value)}
+            />
+          </label>
+          <label className="block text-sm text-stone-600">
+            {t('backupFolder')}
+            <div className="flex gap-2 mt-1">
+              <input
+                className="flex-1 border border-stone-300 rounded-lg px-3 py-2"
+                value={backupFolder}
+                onChange={(e) => setBackupFolder(e.target.value)}
+                placeholder={t('backupFolderPlaceholder')}
+              />
+              <button
+                type="button"
+                className="border rounded-lg px-3 py-2 text-sm"
+                onClick={() => {
+                  void window.api.settings.pickFolder().then((folder) => {
+                    if (folder) {
+                      setBackupFolder(folder);
+                    }
+                  });
+                }}
+              >
+                …
+              </button>
+            </div>
+          </label>
+          {onboardingError ? <p className="text-sm text-red-700">{onboardingError}</p> : null}
+          <button
+            type="button"
+            className="w-full bg-stone-800 text-white rounded-lg py-2.5 hover:bg-stone-700"
+            onClick={() => {
+              if (!editorLabel.trim()) {
+                setOnboardingError(t('editorLabelRequired'));
+                return;
+              }
+              if (!backupFolder.trim()) {
+                setOnboardingError(t('backupFolderRequired'));
+                return;
+              }
+              if (!canCompleteOnboarding(editorLabel, backupFolder)) {
+                setOnboardingError(t('errors.onboardingRequired'));
+                return;
+              }
+              setOnboardingError('');
+              void onCompleteOnboarding({ editorLabel: editorLabel.trim(), backupFolder: backupFolder.trim() });
+            }}
+          >
+            {t('onboardingContinue')}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#f4f1eb] to-[#e8e0d4] p-8">

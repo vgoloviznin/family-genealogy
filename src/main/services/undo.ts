@@ -1,42 +1,38 @@
 import type { UndoAction } from '@shared/types';
+import { withSqliteTransaction } from '../db/connection';
 import * as people from './people';
 import * as family from './family';
 import * as sources from './sources';
+import { takeUndoStep, runWithUndoDepth } from './undo-stack';
 
-const MAX_UNDO = 5;
-const stack: UndoAction[] = [];
-
-export function pushUndo(action: UndoAction): void {
-  stack.push(action);
-  if (stack.length > MAX_UNDO) {
-    stack.shift();
-  }
-}
-
-export function popUndo(): UndoAction | null {
-  return stack.pop() ?? null;
-}
-
-export function canUndo(): boolean {
-  return stack.length > 0;
-}
-
-export function clearUndo(): void {
-  stack.length = 0;
-}
+export { recordUndo, withUndoSuppressed, canUndo, clearUndo, getUndoStackLength } from './undo-stack';
 
 export async function performUndo(): Promise<UndoAction | null> {
-  const action = popUndo();
-  if (!action) {
+  const step = takeUndoStep();
+  if (!step || step.length === 0) {
     return null;
   }
 
+  await withSqliteTransaction(() =>
+    runWithUndoDepth(async () => {
+      for (let i = step.length - 1; i >= 0; i--) {
+        await applyInversion(step[i]!);
+      }
+    })
+  );
+  return step[0] ?? null;
+}
+
+async function applyInversion(action: UndoAction): Promise<void> {
   switch (action.type) {
     case 'person-update':
       await people.updatePerson(action.before);
       break;
     case 'person-undelete':
       await people.restorePerson(action.id);
+      break;
+    case 'person-delete':
+      await people.deletePerson(action.id);
       break;
     case 'event-delete':
       await people.deleteEvent(action.id);
@@ -65,5 +61,4 @@ export async function performUndo(): Promise<UndoAction | null> {
     default:
       break;
   }
-  return action;
 }

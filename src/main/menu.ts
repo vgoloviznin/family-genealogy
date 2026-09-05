@@ -9,6 +9,7 @@ export function setMenuWindow(win: BrowserWindow | null): void {
 }
 
 export function buildMenu(locale: AppLocale): void {
+  const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
   const template: MenuItemConstructorOptions[] = [
     {
       label: t(locale, 'menu.file'),
@@ -47,9 +48,13 @@ export function buildMenu(locale: AppLocale): void {
     {
       label: t(locale, 'menu.view'),
       submenu: [
-        { label: t(locale, 'menu.reload'), role: 'reload' },
-        { label: t(locale, 'menu.toggleDevTools'), role: 'toggleDevTools' },
-        { type: 'separator' },
+        ...(isDev
+          ? ([
+              { label: t(locale, 'menu.reload'), role: 'reload' },
+              { label: t(locale, 'menu.toggleDevTools'), role: 'toggleDevTools' },
+              { type: 'separator' }
+            ] as MenuItemConstructorOptions[])
+          : []),
         { label: t(locale, 'menu.resetZoom'), role: 'resetZoom' },
         { label: t(locale, 'menu.zoomIn'), role: 'zoomIn' },
         { label: t(locale, 'menu.zoomOut'), role: 'zoomOut' }
@@ -61,6 +66,10 @@ export function buildMenu(locale: AppLocale): void {
         {
           label: t(locale, 'menu.syncHelp'),
           click: () => mainWindow?.webContents.send('menu:command', 'syncHelp')
+        },
+        {
+          label: t(locale, 'menu.copyDiagnostics'),
+          click: () => mainWindow?.webContents.send('menu:command', 'copyDiagnostics')
         }
       ]
     }

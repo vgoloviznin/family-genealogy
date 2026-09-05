@@ -51,10 +51,15 @@
   "backup": "Backup",
   "restore": "Restore",
   "backupFolder": "Backup folder",
-  "backupFolderPlaceholder": "Default: Backups folder in project",
+  "backupFolderPlaceholder": "Default: Backups folder in app data",
   "backupOnQuit": "Backup on quit",
   "backupKeepCount": "Keep copies",
   "editorLabel": "Editor label",
+  "onboardingTitle": "Welcome",
+  "onboardingSubtitle": "Choose language, editor name, and backup folder",
+  "onboardingContinue": "Continue",
+  "editorLabelRequired": "Enter an editor label",
+  "backupFolderRequired": "Choose a backup folder",
   "avatar": {
     "changePhoto": "Change photo",
     "addPhoto": "Add photo",
@@ -63,7 +68,8 @@
   },
   "toast": {
     "exportDone": "Export: {{path}}",
-    "backupDone": "Backup: {{path}}"
+    "backupDone": "Backup: {{path}}",
+    "diagnosticsCopied": "Diagnostics copied to clipboard"
   },
   "mergeBatchPreviewNote": "For previewing later archives, unresolved conflicts were temporarily treated as from the archive.",
   "place": "Place",
@@ -135,6 +141,8 @@
     "emptyFamily": "No family links added yet.",
     "newPartner": "New spouse",
     "newChild": "New child",
+    "chooseUnionForChild": "Union for child…",
+    "newUnionForChild": "New union",
     "newParent": "New parent",
     "newSibling": "New sibling",
     "linkExisting": "Link existing",
@@ -365,6 +373,7 @@
     "view": "View",
     "help": "Help",
     "syncHelp": "How to synchronize…",
+    "copyDiagnostics": "Copy diagnostics",
     "cut": "Cut",
     "copy": "Copy",
     "paste": "Paste",
@@ -389,7 +398,7 @@
     "addFiles": "Add files",
     "imagesFilter": "Images",
     "allFilesFilter": "All files",
-    "fgtreeFilter": "Family Geneology archive"
+    "fgtreeFilter": "Family Genealogy archive"
   },
   "progress": {
     "unpackingArchive": "Unpacking archive…",
@@ -405,9 +414,17 @@
   "errors": {
     "cancelled": "Cancelled",
     "folderNotEmpty": "Folder is not empty. Choose an empty folder or create a new one.",
-    "notAProject": "No project.json in folder — not a Family Geneology project.",
+    "notAProject": "No project.json in folder — not a Family Genealogy project.",
     "projectNotOpen": "No project open",
     "projectNameEmpty": "Project name cannot be empty",
+    "projectNewerVersion": "Project was created in a newer app version",
+    "databaseMissing": "No family.sqlite in the project folder",
+    "databaseNewerVersion": "Database was created in a newer app version",
+    "copyDiagnosticsFailed": "Failed to copy diagnostics",
+    "familyChoiceRequired": "Choose a union for the child",
+    "mediaTooLarge": "File is too large (max {{maxMb}} MB)",
+    "invalidIpcArgument": "Invalid IPC argument: {{label}}",
+    "onboardingRequired": "Set editor label and backup folder first",
     "invalidArchiveNoManifest": "Invalid file: no manifest.json",
     "invalidArchiveFormat": "Invalid archive format",
     "dbHashMismatch": "Database checksum does not match",

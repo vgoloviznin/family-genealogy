@@ -5,6 +5,7 @@ dist
 coverage
 *.log
 .DS_Store
+.tools
 
 # Accidental tsc emit (electron-vite builds to out/)
 src/**/*.js

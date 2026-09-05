@@ -224,4 +224,27 @@ describe.skipIf(!isSqliteAvailable())('family service', () => {
       project.cleanup();
     }
   });
+
+  it('requires family choice when person has multiple unions', async () => {
+    const project = createTestProjectDir();
+    try {
+      const person = await createPerson({ firstName: 'Alex', lastName: 'A' });
+      await addPartner(person.id, { firstName: 'First', lastName: 'Spouse' });
+      await addPartner(person.id, { firstName: 'Second', lastName: 'Spouse' });
+      const families = await getFamiliesForPerson(person.id);
+      expect(families.length).toBeGreaterThanOrEqual(2);
+
+      await expect(addChildToPerson(person.id, { firstName: 'Kid', lastName: 'A' })).rejects.toThrow(
+        localizedErrorMessage('errors.familyChoiceRequired')
+      );
+
+      const target = families[1]!.id;
+      const child = await addChildToPerson(person.id, { firstName: 'Kid', lastName: 'A' }, 'birth', target);
+      const after = await getFamiliesForPerson(person.id);
+      const withChild = after.find((f) => f.children.some((c) => c.person.id === child.id));
+      expect(withChild?.id).toBe(target);
+    } finally {
+      project.cleanup();
+    }
+  });
 });

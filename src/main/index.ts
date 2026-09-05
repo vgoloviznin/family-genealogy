@@ -12,6 +12,7 @@ import { applyAppLocale } from './locale';
 import { setMenuWindow } from './menu';
 import { IPC_CHANNELS } from '@shared/types';
 import { validateLocale } from '@shared/locales';
+import { initLogging, logError } from './utils/log';
 
 let mainWindow: BrowserWindow | null = null;
 let cachedAppIcon: Electron.NativeImage | null = null;
@@ -115,9 +116,17 @@ if (!gotLock) {
   });
 
   app.whenReady().then(() => {
+    initLogging();
     setDockIcon();
     const locale = validateLocale(getSettings().locale);
     initAppLocale(locale);
+
+    process.on('uncaughtException', (err) => {
+      logError('uncaughtException', err);
+    });
+    process.on('unhandledRejection', (reason) => {
+      logError('unhandledRejection', reason);
+    });
 
     protocol.handle('family-media', (request) => {
       const url = new URL(request.url);

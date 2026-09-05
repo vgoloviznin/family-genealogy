@@ -1,8 +1,10 @@
 import { app } from 'electron';
+import { join } from 'path';
 import Store from 'electron-store';
 import { v7 as uuidv7 } from 'uuid';
 import type { AppSettings } from '@shared/types';
 import { validateLocale } from '@shared/locales';
+import { localizedError } from '../i18n';
 
 const defaults: AppSettings = {
   deviceId: uuidv7(),
@@ -10,7 +12,8 @@ const defaults: AppSettings = {
   locale: 'ru',
   backupOnQuit: true,
   backupKeepCount: 10,
-  recentProjects: []
+  recentProjects: [],
+  onboardingComplete: false
 };
 
 let store: Store<AppSettings> | null = null;
@@ -24,6 +27,10 @@ function getStore(): Store<AppSettings> {
     });
   }
   return store;
+}
+
+export function getDefaultBackupFolder(): string {
+  return join(app.getPath('userData'), 'Backups');
 }
 
 export function getSettings(): AppSettings {
@@ -41,8 +48,24 @@ export function getSettings(): AppSettings {
   return data;
 }
 
+function onboardingFieldsReady(settings: AppSettings): boolean {
+  return Boolean(settings.editorLabel?.trim() && settings.backupFolder?.trim());
+}
+
+export function assertOnboardingComplete(): void {
+  const settings = getSettings();
+  if (settings.onboardingComplete === true && onboardingFieldsReady(settings)) {
+    return;
+  }
+  throw new Error(localizedError('errors.onboardingRequired'));
+}
+
 export function updateSettings(partial: Partial<AppSettings>): AppSettings {
   const s = getStore();
+  const next: AppSettings = { ...getSettings(), ...partial };
+  if (next.onboardingComplete && !onboardingFieldsReady(next)) {
+    throw new Error(localizedError('errors.onboardingRequired'));
+  }
   for (const [key, value] of Object.entries(partial)) {
     if (value !== undefined) {
       s.set(key as keyof AppSettings, value as never);

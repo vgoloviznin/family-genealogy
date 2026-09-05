@@ -28,7 +28,10 @@ export function PersonMediaTab({ person, onRefresh }: Props) {
               <div className="flex gap-1 justify-center mt-1.5 flex-wrap">
                 <GhostBtn label={t('personDetail.openMedia')} onClick={() => void window.api.media.open(m.id)} />
                 {!m.isPrimary && (
-                  <GhostBtn label={t('personDetail.setPrimaryMedia')} onClick={() => void window.api.media.setPrimary(person.id, m.id).then(onRefresh)} />
+                  <GhostBtn
+                    label={t('personDetail.setPrimaryMedia')}
+                    onClick={() => void window.api.media.setPrimary(person.id, m.id).then(onRefresh)}
+                  />
                 )}
                 <DangerBtn
                   label={t('delete')}

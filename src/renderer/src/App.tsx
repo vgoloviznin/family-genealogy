@@ -3,20 +3,20 @@ import { useTranslation } from 'react-i18next';
 import { WelcomeScreen } from './components/WelcomeScreen';
 import { ProjectPersonDetailPanel } from './components/ProjectPersonDetailPanel';
 import { PersonAvatar } from './components/PersonAvatar';
+import { ProjectHeader } from './components/ProjectHeader';
 import { TreeView } from './components/TreeView';
 import { MergeConflictDialog } from './components/MergeConflictDialog';
 import { MergeReportDialog } from './components/MergeReportDialog';
 import { SyncHelpDialog } from './components/SyncHelpDialog';
 import { SettingsModal } from './components/SettingsModal';
-import { LocaleSelect } from './components/LocaleSelect';
 import { PromptDialog } from './components/PromptDialog';
 import { Toast } from './components/Toast';
 import { personLabel, formatLifeSpan } from './lib/labels';
+import { needsOnboarding } from './lib/onboarding';
 import { useToast } from './hooks/useToast';
 import { useLocale } from './hooks/useLocale';
 import { useProjectSession, useMenuCommands } from './hooks/useProjectSession';
 import { useSyncFlow } from './hooks/useSyncFlow';
-import appIcon from './assets/icon.png';
 
 export default function App() {
   const { t } = useTranslation();
@@ -46,7 +46,10 @@ export default function App() {
     handleExport: session.handleExport,
     handleBackup: session.handleBackup,
     handleRestore: session.handleRestore,
-    handleUndo: session.handleUndo
+    handleUndo: session.handleUndo,
+    showToast,
+    hasProject: Boolean(session.project),
+    onboardingBlocked: needsOnboarding(session.settings)
   });
 
   if (!ready) {
@@ -64,6 +67,12 @@ export default function App() {
           locale={locale}
           onLocaleChange={(next) => {
             void setLocale(next).then((s) => session.setSettings(s));
+          }}
+          settings={session.settings}
+          onboardingRequired={needsOnboarding(session.settings)}
+          onCompleteOnboarding={async (partial) => {
+            const s = await window.api.settings.set({ ...partial, onboardingComplete: true });
+            session.setSettings(s);
           }}
           recents={session.recents}
           onCreate={(n) => void session.handleCreate(n)}
@@ -90,50 +99,13 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-[#f4f1eb]">
-      <header className="flex items-center gap-4 px-4 py-3 bg-white border-b border-stone-200 shadow-sm">
-        <img src={appIcon} alt="" width={28} height={28} className="w-7 h-7" />
-        <h1 className="font-serif text-lg text-stone-800">{t('appTitleWithProject', { name: project.name })}</h1>
-        {project.cloudWarning && <span className="text-xs bg-amber-100 text-amber-900 px-2 py-1 rounded">{t('cloudWarning')}</span>}
-        <div className="flex-1" />
-        <LocaleSelect
-          compact
-          value={locale}
-          onChange={(next) => {
-            void setLocale(next).then((s) => session.setSettings(s));
-          }}
-        />
-        <button className="text-sm px-3 py-1 rounded border" onClick={() => void session.flushThen(() => session.setView('list'))}>
-          {t('people')}
-        </button>
-        <button className="text-sm px-3 py-1 rounded border" onClick={() => void session.flushThen(() => session.setView('tree'))}>
-          {t('tree')}
-        </button>
-        <button className="text-sm px-3 py-1 rounded border" onClick={() => void session.handleExport()}>
-          {t('export')}
-        </button>
-        <button className="text-sm px-3 py-1 rounded border" onClick={() => void sync.handleSync()}>
-          {t('syncFromArchive')}
-        </button>
-        <button className="text-sm px-3 py-1 rounded border" onClick={() => void sync.handleSyncBatch()}>
-          {t('syncBatchFromArchives')}
-        </button>
-        <button className="text-sm px-3 py-1 rounded border" onClick={() => sync.setSyncHelpOpen(true)}>
-          {t('syncHelpLink')}
-        </button>
-        <button className="text-sm px-3 py-1 rounded border" onClick={() => void session.handleBackup()}>
-          {t('backup')}
-        </button>
-        <button
-          className="text-sm px-3 py-1 rounded border disabled:opacity-40 disabled:cursor-not-allowed"
-          disabled={!session.canUndo}
-          onClick={() => void session.handleUndo()}
-        >
-          {t('undo')}
-        </button>
-        <button className="text-sm px-3 py-1 rounded border" onClick={() => session.setSettingsOpen(true)}>
-          {t('settings')}
-        </button>
-      </header>
+      <ProjectHeader
+        projectName={project.name}
+        cloudWarning={project.cloudWarning}
+        onPeople={() => void session.flushThen(() => session.setView('list'))}
+        onTree={() => void session.flushThen(() => session.setView('tree'))}
+        onSettings={() => session.setSettingsOpen(true)}
+      />
 
       <div className="flex-1 flex gap-3 p-3 min-h-0">
         {session.view === 'list' ? (

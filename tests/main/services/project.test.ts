@@ -33,7 +33,9 @@ vi.mock('@main/services/settings', () => ({
 }));
 
 vi.mock('@main/services/undo', () => ({
-  clearUndo: vi.fn()
+  clearUndo: vi.fn(),
+  recordUndo: vi.fn(),
+  withUndoSuppressed: async (fn: () => unknown) => await fn()
 }));
 
 describe('project service', () => {

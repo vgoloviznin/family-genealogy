@@ -25,7 +25,9 @@ vi.mock('@main/services/settings', () => ({
 }));
 
 vi.mock('@main/services/undo', () => ({
-  clearUndo: vi.fn()
+  clearUndo: vi.fn(),
+  recordUndo: vi.fn(),
+  withUndoSuppressed: async (fn: () => unknown) => await fn()
 }));
 
 function sha256File(path: string): Promise<string> {

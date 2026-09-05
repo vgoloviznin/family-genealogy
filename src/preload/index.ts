@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { assertFamilyApi, createFamilyApi } from '@shared/family-api';
 import { IPC_CHANNELS } from '@shared/types';
-import type { Api, ConfirmDialogOptions, PackProgress, ProjectMeta, MenuCommand, UndoAction } from '@shared/types';
+import type { Api, ConfirmDialogOptions, PackProgress, ProjectMeta, MenuCommand } from '@shared/types';
 
 const api: Api = {
   project: {
@@ -80,10 +80,10 @@ const api: Api = {
   settings: {
     get: () => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_GET),
     set: (partial) => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_SET, partial),
-    pickFolder: () => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_PICK_FOLDER)
+    pickFolder: () => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_PICK_FOLDER),
+    getDefaultBackupFolder: () => ipcRenderer.invoke(IPC_CHANNELS.SETTINGS_DEFAULT_BACKUP_FOLDER)
   },
   undo: {
-    push: (action: UndoAction) => ipcRenderer.invoke(IPC_CHANNELS.UNDO_PUSH, action),
     perform: () => ipcRenderer.invoke(IPC_CHANNELS.UNDO_PERFORM),
     canUndo: () => ipcRenderer.invoke(IPC_CHANNELS.UNDO_CAN)
   },
@@ -106,7 +106,8 @@ const api: Api = {
       };
       ipcRenderer.on(IPC_CHANNELS.APP_PREPARE_QUIT, listener);
       return () => ipcRenderer.removeListener(IPC_CHANNELS.APP_PREPARE_QUIT, listener);
-    }
+    },
+    copyDiagnostics: () => ipcRenderer.invoke(IPC_CHANNELS.APP_COPY_DIAGNOSTICS)
   }
 };
 

@@ -54,8 +54,8 @@
     "@types/react-dom": "19.2.4",
     "@types/uuid": "10.0.0",
     "@types/yauzl": "3.4.0",
-    "@vitest/coverage-v8": "3.2.7",
     "@vitejs/plugin-react": "5.2.0",
+    "@vitest/coverage-v8": "3.2.7",
     "drizzle-kit": "0.31.10",
     "electron": "44.0.0",
     "electron-builder": "26.15.3",
@@ -64,6 +64,7 @@
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-prettier": "5.5.6",
     "globals": "17.11.0",
+    "happy-dom": "20.0.2",
     "prettier": "3.9.6",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3",
@@ -82,8 +83,8 @@
     "rimraf": "6.0.1"
   },
   "build": {
-    "appId": "com.family.geneology",
-    "productName": "Family Geneology",
+    "appId": "com.family.genealogy",
+    "productName": "Family Genealogy",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -99,21 +100,28 @@
     ],
     "mac": {
       "icon": "build/icon.icns",
+      "identity": "-",
       "target": [
-        "dmg"
+        {
+          "target": "dmg",
+          "arch": ["arm64"]
+        }
       ],
       "category": "public.app-category.productivity"
     },
     "win": {
       "icon": "build/icon.ico",
       "target": [
-        "nsis"
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
       ]
     },
     "fileAssociations": [
       {
         "ext": "fgtree",
-        "name": "Family Geneology Tree",
+        "name": "Family Genealogy Tree",
         "description": "Family genealogy project archive",
         "role": "Editor",
         "icon": "build/icon"

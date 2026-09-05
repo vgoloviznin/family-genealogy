@@ -166,3 +166,8 @@ export const appMeta = sqliteTable('app_meta', {
   key: text('key').primaryKey(),
   value: text('value').notNull()
 });
+
+export const schemaMigrations = sqliteTable('schema_migrations', {
+  version: integer('version').primaryKey(),
+  appliedAt: text('applied_at').notNull()
+});

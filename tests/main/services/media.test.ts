@@ -1,12 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { dialog } from 'electron';
 import { createTestProjectDir } from '../../helpers/project-fixture';
 import { isSqliteAvailable } from '../../helpers/sqlite-available';
 import { closeProject, openProjectAtPath } from '@main/services/project';
 import { createPerson, getPersonDetail } from '@main/services/people';
-import { addMedia, deleteMedia, getThumbUrls, listMediaForPerson, mediaUrl, resolveMediaPath } from '@main/services/media';
+import {
+  addMedia,
+  assertMediaFileSize,
+  deleteMedia,
+  getThumbUrls,
+  listMediaForPerson,
+  MAX_MEDIA_BYTES,
+  mediaUrl,
+  resolveMediaPath
+} from '@main/services/media';
 
 vi.mock('@main/services/settings', () => ({
   getDeviceMeta: () => ({ deviceId: 'test-device', label: 'tester' }),
@@ -30,6 +39,11 @@ function writeTinyPng(path: string): void {
 describe('media helpers', () => {
   it('builds encoded media URLs', () => {
     expect(mediaUrl('media/photo one.jpg')).toBe('family-media://project/media/photo%20one.jpg');
+  });
+
+  it('rejects files over 50MB', () => {
+    expect(() => assertMediaFileSize(MAX_MEDIA_BYTES + 1)).toThrow();
+    expect(() => assertMediaFileSize(1024)).not.toThrow();
   });
 });
 
@@ -99,6 +113,12 @@ describe.skipIf(!isSqliteAvailable())('media service', () => {
       expect(resolveMediaPath(relativePath)).toBe(join(project.path, relativePath));
       expect(resolveMediaPath('../outside.png')).toBeNull();
       expect(resolveMediaPath('missing/file.png')).toBeNull();
+
+      // sibling directory sharing path prefix must not resolve
+      const evilDir = join(project.path + '-evil');
+      mkdirSync(evilDir, { recursive: true });
+      writeFileSync(join(evilDir, 'secret.png'), TINY_PNG);
+      expect(resolveMediaPath(`../${project.path.split(/[/\\]/).pop()}-evil/secret.png`)).toBeNull();
     } finally {
       project.cleanup();
     }

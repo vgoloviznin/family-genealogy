@@ -51,7 +51,7 @@ export function PersonSourcesTab({ person, onRefresh, onError }: Props) {
         page: citePage,
         excerpt: citeExcerpt
       });
-      await window.api.undo.push({ type: 'citation-delete', id: created.id });
+      void created;
       setShowCiteForm(false);
       setCiteSourceId('');
       setCiteNewTitle('');
@@ -138,8 +138,7 @@ export function PersonSourcesTab({ person, onRefresh, onError }: Props) {
                   {c.eventId && (
                     <div className="text-xs text-stone-500 mt-0.5">
                       {t('personDetail.citationForEvent', {
-                        event:
-                          eventTypeLabel(allEvents.find((e) => e.id === c.eventId)?.type ?? '') || t('personDetail.eventFallback')
+                        event: eventTypeLabel(allEvents.find((e) => e.id === c.eventId)?.type ?? '') || t('personDetail.eventFallback')
                       })}
                     </div>
                   )}
@@ -147,10 +146,10 @@ export function PersonSourcesTab({ person, onRefresh, onError }: Props) {
                 <DangerBtn
                   label={t('delete')}
                   onClick={() => {
-                    void window.api.undo
-                      .push({ type: 'citation-restore', id: c.id })
-                      .then(() => window.api.citations.delete(c.id))
-                      .then(onRefresh);
+                    void window.api.citations
+                      .delete(c.id)
+                      .then(onRefresh)
+                      .catch((e) => onError((e as Error).message));
                   }}
                 />
               </div>

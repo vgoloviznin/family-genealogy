@@ -10,9 +10,10 @@ import { ActionBtn, DangerBtn, EmptyState, GhostBtn } from './ui';
 interface Props {
   person: PersonDetail;
   onRefresh: () => Promise<void>;
+  onError: (message: string) => void;
 }
 
-export function PersonEventsTab({ person, onRefresh }: Props) {
+export function PersonEventsTab({ person, onRefresh, onError }: Props) {
   const { t, i18n } = useTranslation();
   const [editingEventId, setEditingEventId] = useState<string | 'new' | null>(null);
   const [eventDraft, setEventDraft] = useState<UpsertEventInput>({
@@ -42,17 +43,13 @@ export function PersonEventsTab({ person, onRefresh }: Props) {
   }, [editingEventId, addableEventTypes, i18n.language]);
 
   const saveEventDraft = async () => {
-    const created = await window.api.events.upsert({ ...eventDraft, personId: person.id });
-    if (editingEventId === 'new') {
-      await window.api.undo.push({ type: 'event-delete', id: created.id });
-    } else {
-      const prev = allEvents.find((e) => e.id === editingEventId);
-      if (prev) {
-        await window.api.undo.push({ type: 'event-restore', event: snapshotEvent(prev) });
-      }
+    try {
+      await window.api.events.upsert({ ...eventDraft, personId: person.id });
+      setEditingEventId(null);
+      await onRefresh();
+    } catch (e) {
+      onError((e as Error).message);
     }
-    setEditingEventId(null);
-    await onRefresh();
   };
 
   const deleteEvent = async (ev: LifeEvent) => {
@@ -63,12 +60,15 @@ export function PersonEventsTab({ person, onRefresh }: Props) {
     if (!confirmed) {
       return;
     }
-    await window.api.undo.push({ type: 'event-restore', event: snapshotEvent(ev) });
-    await window.api.events.delete(ev.id);
-    if (ev.type === 'death') {
-      await window.api.people.update({ id: person.id, isLiving: true, death: null });
+    try {
+      await window.api.events.delete(ev.id);
+      if (ev.type === 'death') {
+        await window.api.people.update({ id: person.id, isLiving: true, death: null });
+      }
+      await onRefresh();
+    } catch (e) {
+      onError((e as Error).message);
     }
-    await onRefresh();
   };
 
   return (
