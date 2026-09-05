@@ -6,7 +6,21 @@
 
 Desktop-приложение для ведения семейного архива: люди, семейные связи, события, источники/цитаты, медиа, дерево предков/потомков. Данные хранятся **локально** в папке проекта.
 
-Репозиторий: [vgoloviznin/family-genealogy](https://github.com/vgoloviznin/family-genealogy). Default branch — **`main`**. Изменения — через PR; CI (`lint` + `test`) обязателен. Релизы установщиков — только по тегу `v*` (см. README «Как выпустить версию»); артефакты на GitHub Releases.
+Репозиторий: [vgoloviznin/family-genealogy](https://github.com/vgoloviznin/family-genealogy).
+
+## Git: ветки и релизы
+
+- **Default branch — `main`**. Прямой push запрещён (ruleset): только PR → зелёный CI (`lint-test`) → merge. Force-push и удаление `main` запрещены.
+- Фичи/фиксы: ветка `feat/…` или `fix/…` → PR в `main`. Не коммитить в `main` напрямую.
+- **После merge в `main`** — удалять смерженную ветку на remote (`gh pr merge --delete-branch` или удалить вручную) и локально (`git branch -d …`, `git fetch --prune`), чтобы не копить мусор.
+- **Релизы установщиков** — только по git-тегу `v*` (например `v0.2.0`). Не публиковать артефакты на каждый merge в `main`.
+- Порядок релиза:
+  1. PR с бампом `"version"` в `package.json` (и `package-lock.json`) → merge в `main`.
+  2. На SHA merge: `git tag vX.Y.Z && git push origin vX.Y.Z` — номер без `v` **должен совпадать** с `version` в `package.json` (проверка в workflow).
+  3. [`.github/workflows/release.yml`](.github/workflows/release.yml) собирает **macOS arm64** (DMG, ad-hoc `identity: "-"`) и **Windows x64** (NSIS) и создаёт [GitHub Release](https://github.com/vgoloviznin/family-genealogy/releases) с артефактами.
+- CI на PR/`main`: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — `lint` + `test` (Node из `.nvmrc`; после `npm ci` — `npm rebuild better-sqlite3 sharp` для vitest).
+- Сборки **не подписаны** сертификатами (Gatekeeper / SmartScreen). Подпись Apple/Authenticode — вне текущего процесса.
+- Подробности для пользователей — README («Скачать», «Как выпустить версию»).
 
 ## Стек
 
@@ -77,7 +91,7 @@ npm run build:mac    # dmg для macOS arm64 (ad-hoc identity)
 npm run build:win    # NSIS для Windows x64
 ```
 
-Node 22+ (`.nvmrc`). GitHub Actions: `.github/workflows/ci.yml` (PR/`main`), `.github/workflows/release.yml` (теги `v*`).
+Node 22+ (`.nvmrc`). Workflows — см. раздел «Git: ветки и релизы».
 
 ## Формат проекта
 
