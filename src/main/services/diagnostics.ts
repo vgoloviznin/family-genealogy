@@ -36,6 +36,6 @@ export function copyDiagnosticsToClipboard(): { ok: true } {
     return { ok: true };
   } catch (err) {
     logError('copyDiagnostics', err);
-    throw new Error(localizedError('errors.copyDiagnosticsFailed'));
+    throw new Error(localizedError('errors.copyDiagnosticsFailed'), { cause: err });
   }
 }

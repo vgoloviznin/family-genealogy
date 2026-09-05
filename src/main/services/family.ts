@@ -18,9 +18,7 @@ async function countActiveFamilyChildren(familyId: string): Promise<number> {
     .select({ count: sql<number>`count(*)` })
     .from(schema.familyChildren)
     .innerJoin(schema.people, eq(schema.familyChildren.personId, schema.people.id))
-    .where(
-      and(eq(schema.familyChildren.familyId, familyId), isNull(schema.familyChildren.deletedAt), isNull(schema.people.deletedAt))
-    );
+    .where(and(eq(schema.familyChildren.familyId, familyId), isNull(schema.familyChildren.deletedAt), isNull(schema.people.deletedAt)));
   return Number(row?.count ?? 0);
 }
 
@@ -30,9 +28,7 @@ async function countActiveFamilyPartners(familyId: string): Promise<number> {
     .select({ count: sql<number>`count(*)` })
     .from(schema.familyPartners)
     .innerJoin(schema.people, eq(schema.familyPartners.personId, schema.people.id))
-    .where(
-      and(eq(schema.familyPartners.familyId, familyId), isNull(schema.familyPartners.deletedAt), isNull(schema.people.deletedAt))
-    );
+    .where(and(eq(schema.familyPartners.familyId, familyId), isNull(schema.familyPartners.deletedAt), isNull(schema.people.deletedAt)));
   return Number(row?.count ?? 0);
 }
 
@@ -280,7 +276,12 @@ export async function linkExistingPartner(personId: string, partnerId: string, u
   });
 }
 
-export async function linkExistingChild(personId: string, childId: string, pedigree: PedigreeType = 'birth', familyId?: string | 'new'): Promise<void> {
+export async function linkExistingChild(
+  personId: string,
+  childId: string,
+  pedigree: PedigreeType = 'birth',
+  familyId?: string | 'new'
+): Promise<void> {
   if (personId === childId) {
     throw new Error(localizedError('errors.cannotSelfChild'));
   }
@@ -349,7 +350,9 @@ export async function unlinkPartner(familyId: string, personId: string): Promise
     const [link] = await db
       .select()
       .from(schema.familyPartners)
-      .where(and(eq(schema.familyPartners.familyId, familyId), eq(schema.familyPartners.personId, personId), isNull(schema.familyPartners.deletedAt)));
+      .where(
+        and(eq(schema.familyPartners.familyId, familyId), eq(schema.familyPartners.personId, personId), isNull(schema.familyPartners.deletedAt))
+      );
     if (!link) {
       throw new Error(localizedError('errors.familyLinkNotFound'));
     }
@@ -367,7 +370,9 @@ export async function unlinkChild(familyId: string, personId: string): Promise<v
     const [link] = await db
       .select()
       .from(schema.familyChildren)
-      .where(and(eq(schema.familyChildren.familyId, familyId), eq(schema.familyChildren.personId, personId), isNull(schema.familyChildren.deletedAt)));
+      .where(
+        and(eq(schema.familyChildren.familyId, familyId), eq(schema.familyChildren.personId, personId), isNull(schema.familyChildren.deletedAt))
+      );
     if (!link) {
       throw new Error(localizedError('errors.familyLinkNotFound'));
     }
@@ -432,7 +437,9 @@ export async function dissolveUnion(familyId: string, personId: string): Promise
     const [membership] = await db
       .select()
       .from(schema.familyPartners)
-      .where(and(eq(schema.familyPartners.familyId, familyId), eq(schema.familyPartners.personId, personId), isNull(schema.familyPartners.deletedAt)));
+      .where(
+        and(eq(schema.familyPartners.familyId, familyId), eq(schema.familyPartners.personId, personId), isNull(schema.familyPartners.deletedAt))
+      );
     if (!membership) {
       throw new Error(localizedError('errors.notInUnion'));
     }

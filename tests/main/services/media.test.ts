@@ -6,7 +6,16 @@ import { createTestProjectDir } from '../../helpers/project-fixture';
 import { isSqliteAvailable } from '../../helpers/sqlite-available';
 import { closeProject, openProjectAtPath } from '@main/services/project';
 import { createPerson, getPersonDetail } from '@main/services/people';
-import { addMedia, assertMediaFileSize, deleteMedia, getThumbUrls, listMediaForPerson, MAX_MEDIA_BYTES, mediaUrl, resolveMediaPath } from '@main/services/media';
+import {
+  addMedia,
+  assertMediaFileSize,
+  deleteMedia,
+  getThumbUrls,
+  listMediaForPerson,
+  MAX_MEDIA_BYTES,
+  mediaUrl,
+  resolveMediaPath
+} from '@main/services/media';
 
 vi.mock('@main/services/settings', () => ({
   getDeviceMeta: () => ({ deviceId: 'test-device', label: 'tester' }),

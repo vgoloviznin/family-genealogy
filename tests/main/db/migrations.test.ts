@@ -76,9 +76,7 @@ describe.skipIf(!isSqliteAvailable())('migrations', () => {
     try {
       const sqlite = new Database(dbPath);
       runMigrations(sqlite);
-      sqlite
-        .prepare(`INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)`)
-        .run(SCHEMA_VERSION + 1, new Date().toISOString());
+      sqlite.prepare(`INSERT INTO schema_migrations (version, applied_at) VALUES (?, ?)`).run(SCHEMA_VERSION + 1, new Date().toISOString());
       expect(() => runMigrations(sqlite)).toThrow(localizedErrorMessage('errors.databaseNewerVersion'));
       sqlite.close();
     } finally {

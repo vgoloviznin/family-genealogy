@@ -391,14 +391,12 @@ export function useMenuCommands(options: {
 
   useEffect(() => {
     return window.api.menu.onCommand((command: MenuCommand) => {
-      const needsOnboardingGate =
-        command === 'createProject' || command === 'openProject' || command === 'import' || command === 'restore';
+      const needsOnboardingGate = command === 'createProject' || command === 'openProject' || command === 'import' || command === 'restore';
       if (needsOnboardingGate && onboardingBlocked) {
         showToast(t('errors.onboardingRequired'), 'error');
         return;
       }
-      const needsProject =
-        command === 'export' || command === 'backup' || command === 'sync' || command === 'syncBatch' || command === 'undo';
+      const needsProject = command === 'export' || command === 'backup' || command === 'sync' || command === 'syncBatch' || command === 'undo';
       if (needsProject && !hasProject) {
         showToast(t('errors.projectNotOpen'), 'error');
         return;

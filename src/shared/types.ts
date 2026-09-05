@@ -100,17 +100,7 @@ export type ConfirmDialogOptions = {
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
 export type MenuCommand =
-  | 'createProject'
-  | 'openProject'
-  | 'import'
-  | 'export'
-  | 'backup'
-  | 'restore'
-  | 'sync'
-  | 'syncBatch'
-  | 'syncHelp'
-  | 'undo'
-  | 'copyDiagnostics';
+  'createProject' | 'openProject' | 'import' | 'export' | 'backup' | 'restore' | 'sync' | 'syncBatch' | 'syncHelp' | 'undo' | 'copyDiagnostics';
 
 export type Sex = 'male' | 'female' | 'other' | 'unknown';
 export type PedigreeType = 'birth' | 'adopted' | 'step' | 'foster';

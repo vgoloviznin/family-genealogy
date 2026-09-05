@@ -47,9 +47,7 @@ describe('ipc wrap', () => {
   });
 
   it('assertStringArray rejects non-string items', () => {
-    expect(() => assertStringArray('x', 'archivePaths')).toThrow(
-      localizedErrorMessage('errors.invalidIpcArgument', { label: 'archivePaths' })
-    );
+    expect(() => assertStringArray('x', 'archivePaths')).toThrow(localizedErrorMessage('errors.invalidIpcArgument', { label: 'archivePaths' }));
     expect(assertStringArray(['/a.fgtree'], 'archivePaths')).toEqual(['/a.fgtree']);
   });
 });

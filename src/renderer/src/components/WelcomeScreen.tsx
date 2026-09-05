@@ -67,7 +67,11 @@ export function WelcomeScreen({
           <LocaleSelect value={locale} onChange={onLocaleChange} />
           <label className="block text-sm text-stone-600">
             {t('editorLabel')}
-            <input className="w-full border border-stone-300 rounded-lg px-3 py-2 mt-1" value={editorLabel} onChange={(e) => setEditorLabel(e.target.value)} />
+            <input
+              className="w-full border border-stone-300 rounded-lg px-3 py-2 mt-1"
+              value={editorLabel}
+              onChange={(e) => setEditorLabel(e.target.value)}
+            />
           </label>
           <label className="block text-sm text-stone-600">
             {t('backupFolder')}

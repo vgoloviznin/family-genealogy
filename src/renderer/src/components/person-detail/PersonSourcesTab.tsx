@@ -138,8 +138,7 @@ export function PersonSourcesTab({ person, onRefresh, onError }: Props) {
                   {c.eventId && (
                     <div className="text-xs text-stone-500 mt-0.5">
                       {t('personDetail.citationForEvent', {
-                        event:
-                          eventTypeLabel(allEvents.find((e) => e.id === c.eventId)?.type ?? '') || t('personDetail.eventFallback')
+                        event: eventTypeLabel(allEvents.find((e) => e.id === c.eventId)?.type ?? '') || t('personDetail.eventFallback')
                       })}
                     </div>
                   )}

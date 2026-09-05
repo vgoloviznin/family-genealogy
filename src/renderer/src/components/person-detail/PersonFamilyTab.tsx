@@ -175,7 +175,6 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
       ) : (
         person.families.map((f) => {
           const isChildHere = f.children.some((c) => c.person.id === person.id);
-          const selfChild = f.children.find((c) => c.person.id === person.id);
           const spouses = f.partners.filter((p) => p.id !== person.id);
           const siblings = f.children.filter((c) => c.person.id !== person.id);
           const children = isChildHere ? [] : f.children;
@@ -186,12 +185,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                   <div className="text-sm font-medium text-stone-700">{t('personDetail.parentsFamily')}</div>
                   <DangerBtn
                     label={t('personDetail.unlinkFromFamily')}
-                    onClick={() =>
-                      void runFamilyUnlink(
-                        () => window.api.family.unlinkChild(f.id, person.id),
-                        t('personDetail.familyLinkRemoved')
-                      )
-                    }
+                    onClick={() => void runFamilyUnlink(() => window.api.family.unlinkChild(f.id, person.id), t('personDetail.familyLinkRemoved'))}
                   />
                 </div>
               ) : (
@@ -219,10 +213,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                     <DangerBtn
                       label={t('personDetail.unlinkSelf')}
                       onClick={() =>
-                        void runFamilyUnlink(
-                          () => window.api.family.unlinkPartner(f.id, person.id),
-                          t('personDetail.unlinkedFromUnion')
-                        )
+                        void runFamilyUnlink(() => window.api.family.unlinkPartner(f.id, person.id), t('personDetail.unlinkedFromUnion'))
                       }
                     />
                     {f.children.length === 0 &&
@@ -273,10 +264,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                       if (!id) {
                         return;
                       }
-                      void runFamilyAction(
-                        () => window.api.family.linkPartnerToFamily(f.id, id).then(() => undefined),
-                        t('personDetail.saved')
-                      );
+                      void runFamilyAction(() => window.api.family.linkPartnerToFamily(f.id, id).then(() => undefined), t('personDetail.saved'));
                     }}
                   >
                     <option value="">{isChildHere ? t('personDetail.addParentOption') : t('personDetail.addSpouseOption')}</option>
@@ -319,10 +307,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                         </select>
                       }
                       onUnlink={() => {
-                        void runFamilyUnlink(
-                          () => window.api.family.unlinkChild(f.id, c.id),
-                          t('personDetail.linkRemoved')
-                        );
+                        void runFamilyUnlink(() => window.api.family.unlinkChild(f.id, c.id), t('personDetail.linkRemoved'));
                       }}
                     />
                   ))}
@@ -334,10 +319,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                       if (!id) {
                         return;
                       }
-                      void runFamilyAction(
-                        () => window.api.family.linkChildToFamily(f.id, id).then(() => undefined),
-                        t('personDetail.saved')
-                      );
+                      void runFamilyAction(() => window.api.family.linkChildToFamily(f.id, id).then(() => undefined), t('personDetail.saved'));
                     }}
                   >
                     <option value="">{t('personDetail.addSiblingOption')}</option>
@@ -380,10 +362,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                         </select>
                       }
                       onUnlink={() => {
-                        void runFamilyUnlink(
-                          () => window.api.family.unlinkChild(f.id, c.id),
-                          t('personDetail.linkRemoved')
-                        );
+                        void runFamilyUnlink(() => window.api.family.unlinkChild(f.id, c.id), t('personDetail.linkRemoved'));
                       }}
                     />
                   ))}
@@ -395,10 +374,7 @@ export function PersonFamilyTab({ person, otherPeople, onSelectPerson, onRefresh
                       if (!id) {
                         return;
                       }
-                      void runFamilyAction(
-                        () => window.api.family.linkChildToFamily(f.id, id).then(() => undefined),
-                        t('personDetail.saved')
-                      );
+                      void runFamilyAction(() => window.api.family.linkChildToFamily(f.id, id).then(() => undefined), t('personDetail.saved'));
                     }}
                   >
                     <option value="">{t('personDetail.addChildToUnion')}</option>

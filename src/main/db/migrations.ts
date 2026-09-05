@@ -196,9 +196,7 @@ function ensureColumn(sqlite: Database.Database, table: string, column: string, 
 }
 
 function tableExists(sqlite: Database.Database, name: string): boolean {
-  const row = sqlite.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name) as
-    | { name: string }
-    | undefined;
+  const row = sqlite.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(name) as { name: string } | undefined;
   return Boolean(row);
 }
 
