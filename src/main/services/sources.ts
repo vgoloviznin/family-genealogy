@@ -1,9 +1,10 @@
 import { eq, and, isNull } from 'drizzle-orm';
-import { getDatabase } from '../db/connection';
+import { getDatabase, withSqliteTransaction } from '../db/connection';
 import * as schema from '../db/schema';
 import { newId, nowIso } from '../utils/id';
 import { getDeviceMeta } from './settings';
 import { localizedError } from '../i18n';
+import { recordUndo } from './undo-stack';
 import type { CitationView, CreateCitationInput, CreateSourceInput, Source, SourceType } from '@shared/types';
 
 function mapSource(row: typeof schema.sources.$inferSelect): Source {
@@ -112,60 +113,67 @@ export async function listCitationsForPerson(personId: string): Promise<Citation
 }
 
 export async function createCitation(input: CreateCitationInput): Promise<CitationView> {
-  let sourceId = input.sourceId;
-  if (!sourceId && input.newSource) {
-    const source = await createSource(input.newSource);
-    sourceId = source.id;
-  }
-  if (!sourceId) {
-    throw new Error(localizedError('errors.sourceRequired'));
-  }
-  if (!input.personId && !input.eventId) {
-    throw new Error(localizedError('errors.citationNeedsSubject'));
-  }
+  return withSqliteTransaction(async () => {
+    let sourceId = input.sourceId;
+    if (!sourceId && input.newSource) {
+      const source = await createSource(input.newSource);
+      sourceId = source.id;
+    }
+    if (!sourceId) {
+      throw new Error(localizedError('errors.sourceRequired'));
+    }
+    if (!input.personId && !input.eventId) {
+      throw new Error(localizedError('errors.citationNeedsSubject'));
+    }
 
-  const db = getDatabase();
-  const meta = getDeviceMeta();
-  const ts = nowIso();
-  const id = newId();
-  await db.insert(schema.citations).values({
-    id,
-    sourceId,
-    personId: input.personId ?? null,
-    eventId: input.eventId ?? null,
-    page: input.page?.trim() || null,
-    excerpt: input.excerpt?.trim() || null,
-    notes: input.notes?.trim() || null,
-    createdAt: ts,
-    updatedAt: ts,
-    createdByDeviceId: meta.deviceId,
-    updatedByDeviceId: meta.deviceId,
-    updatedByLabel: meta.label || null
+    const db = getDatabase();
+    const meta = getDeviceMeta();
+    const ts = nowIso();
+    const id = newId();
+    await db.insert(schema.citations).values({
+      id,
+      sourceId,
+      personId: input.personId ?? null,
+      eventId: input.eventId ?? null,
+      page: input.page?.trim() || null,
+      excerpt: input.excerpt?.trim() || null,
+      notes: input.notes?.trim() || null,
+      createdAt: ts,
+      updatedAt: ts,
+      createdByDeviceId: meta.deviceId,
+      updatedByDeviceId: meta.deviceId,
+      updatedByLabel: meta.label || null
+    });
+
+    recordUndo({ type: 'citation-delete', id });
+
+    const list = input.personId ? await listCitationsForPerson(input.personId) : [];
+    const created = list.find((c) => c.id === id);
+    if (created) {
+      return created;
+    }
+
+    const [source] = await db.select().from(schema.sources).where(eq(schema.sources.id, sourceId));
+    return {
+      id,
+      sourceId,
+      source: mapSource(source!),
+      personId: input.personId ?? null,
+      eventId: input.eventId ?? null,
+      page: input.page ?? null,
+      excerpt: input.excerpt ?? null,
+      notes: input.notes ?? null
+    };
   });
-
-  const list = input.personId ? await listCitationsForPerson(input.personId) : [];
-  const created = list.find((c) => c.id === id);
-  if (created) {
-    return created;
-  }
-
-  const [source] = await db.select().from(schema.sources).where(eq(schema.sources.id, sourceId));
-  return {
-    id,
-    sourceId,
-    source: mapSource(source!),
-    personId: input.personId ?? null,
-    eventId: input.eventId ?? null,
-    page: input.page ?? null,
-    excerpt: input.excerpt ?? null,
-    notes: input.notes ?? null
-  };
 }
 
 export async function deleteCitation(id: string): Promise<void> {
-  const db = getDatabase();
-  const ts = nowIso();
-  await db.update(schema.citations).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.citations.id, id));
+  await withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const ts = nowIso();
+    await db.update(schema.citations).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.citations.id, id));
+    recordUndo({ type: 'citation-restore', id });
+  });
 }
 
 export async function restoreCitation(id: string): Promise<void> {

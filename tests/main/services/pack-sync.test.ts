@@ -23,12 +23,14 @@ vi.mock('@main/services/settings', () => ({
     recentProjects: []
   }),
   addRecentProject: vi.fn(),
-  pruneRecentProjects: vi.fn()
+  pruneRecentProjects: vi.fn(),
+  assertOnboardingComplete: () => undefined
 }));
 
 vi.mock('@main/services/undo', () => ({
   clearUndo: vi.fn(),
-  pushUndo: vi.fn(),
+  recordUndo: vi.fn(),
+  withUndoSuppressed: async (fn: () => unknown) => await fn(),
   performUndo: vi.fn(),
   canUndo: vi.fn(() => false)
 }));

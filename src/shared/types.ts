@@ -32,6 +32,7 @@ export const IPC_CHANNELS = {
   FAMILY_LINK_SIBLING: 'family:linkSibling',
   FAMILY_LINK_PARTNER_TO_FAMILY: 'family:linkPartnerToFamily',
   FAMILY_LINK_CHILD_TO_FAMILY: 'family:linkChildToFamily',
+  FAMILY_ADD_CHILD_TO_FAMILY: 'family:addChildToFamily',
   FAMILY_UNLINK_PARTNER: 'family:unlinkPartner',
   FAMILY_UNLINK_CHILD: 'family:unlinkChild',
   FAMILY_SET_UNION_TYPE: 'family:setUnionType',
@@ -76,15 +77,16 @@ export const IPC_CHANNELS = {
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
   SETTINGS_PICK_FOLDER: 'settings:pickFolder',
+  SETTINGS_DEFAULT_BACKUP_FOLDER: 'settings:getDefaultBackupFolder',
 
-  UNDO_PUSH: 'undo:push',
   UNDO_PERFORM: 'undo:perform',
   UNDO_CAN: 'undo:can',
 
   DIALOG_CONFIRM: 'dialog:confirm',
 
   APP_PREPARE_QUIT: 'app:prepare-quit',
-  APP_PREPARE_QUIT_DONE: 'app:prepare-quit-done'
+  APP_PREPARE_QUIT_DONE: 'app:prepare-quit-done',
+  APP_COPY_DIAGNOSTICS: 'app:copyDiagnostics'
 } as const;
 
 export type ConfirmDialogOptions = {
@@ -97,7 +99,18 @@ export type ConfirmDialogOptions = {
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
-export type MenuCommand = 'createProject' | 'openProject' | 'import' | 'export' | 'backup' | 'restore' | 'sync' | 'syncBatch' | 'syncHelp' | 'undo';
+export type MenuCommand =
+  | 'createProject'
+  | 'openProject'
+  | 'import'
+  | 'export'
+  | 'backup'
+  | 'restore'
+  | 'sync'
+  | 'syncBatch'
+  | 'syncHelp'
+  | 'undo'
+  | 'copyDiagnostics';
 
 export type Sex = 'male' | 'female' | 'other' | 'unknown';
 export type PedigreeType = 'birth' | 'adopted' | 'step' | 'foster';
@@ -285,6 +298,8 @@ export interface AppSettings {
   backupOnQuit: boolean;
   backupKeepCount: number;
   recentProjects: string[];
+  /** First-run wizard completed (language, editor label, backup folder). */
+  onboardingComplete?: boolean;
 }
 
 export interface PackProgress {
@@ -358,6 +373,7 @@ export interface CreateCitationInput {
 export type UndoAction =
   | { type: 'person-update'; before: UpdatePersonInput }
   | { type: 'person-undelete'; id: string }
+  | { type: 'person-delete'; id: string }
   | { type: 'event-delete'; id: string }
   | { type: 'event-restore'; event: UpsertEventInput & { id: string } }
   | { type: 'family-unlink-partner'; familyId: string; personId: string }
@@ -389,16 +405,17 @@ export interface Api {
   };
   family: {
     addPartner: (personId: string, partnerInput: CreatePersonInput, unionType?: UnionType) => Promise<PersonDetail>;
-    addChild: (personId: string, childInput: CreatePersonInput, pedigree?: PedigreeType) => Promise<PersonDetail>;
+    addChild: (personId: string, childInput: CreatePersonInput, pedigree?: PedigreeType, familyId?: string | 'new') => Promise<PersonDetail>;
     addParents: (personId: string, parentInputs: [CreatePersonInput, CreatePersonInput?], pedigree?: PedigreeType) => Promise<PersonDetail>;
     addSibling: (personId: string, siblingInput: CreatePersonInput, pedigree?: PedigreeType) => Promise<PersonDetail>;
     getForPerson: (personId: string) => Promise<FamilySummary[]>;
     linkPartner: (personId: string, partnerId: string, unionType?: UnionType) => Promise<void>;
-    linkChild: (personId: string, childId: string, pedigree?: PedigreeType) => Promise<void>;
+    linkChild: (personId: string, childId: string, pedigree?: PedigreeType, familyId?: string | 'new') => Promise<void>;
     linkParent: (personId: string, parentId: string, pedigree?: PedigreeType) => Promise<void>;
     linkSibling: (personId: string, siblingId: string, pedigree?: PedigreeType) => Promise<void>;
     linkPartnerToFamily: (familyId: string, personId: string) => Promise<void>;
     linkChildToFamily: (familyId: string, childId: string, pedigree?: PedigreeType) => Promise<void>;
+    addChildToFamily: (familyId: string, childInput: CreatePersonInput, pedigree?: PedigreeType) => Promise<PersonDetail>;
     unlinkPartner: (familyId: string, personId: string) => Promise<void>;
     unlinkChild: (familyId: string, personId: string) => Promise<void>;
     setUnionType: (familyId: string, unionType: UnionType) => Promise<void>;
@@ -454,9 +471,9 @@ export interface Api {
     get: () => Promise<AppSettings>;
     set: (partial: Partial<AppSettings>) => Promise<AppSettings>;
     pickFolder: () => Promise<string | null>;
+    getDefaultBackupFolder: () => Promise<string>;
   };
   undo: {
-    push: (action: UndoAction) => Promise<void>;
     perform: () => Promise<UndoAction | null>;
     canUndo: () => Promise<boolean>;
   };
@@ -468,6 +485,7 @@ export interface Api {
   };
   app: {
     onPrepareQuit: (handler: () => Promise<boolean>) => () => void;
+    copyDiagnostics: () => Promise<{ ok: true }>;
   };
 }
 

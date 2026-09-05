@@ -222,44 +222,67 @@ export function useProjectSession(showToast: (message: string, variant?: 'info' 
   }, [loadProject, showToast]);
 
   const handleExport = useCallback(async () => {
-    const path = await window.api.pack.export();
-    if (path) {
-      showToast(t('toast.exportDone', { path }), 'info', 4000);
+    try {
+      const path = await window.api.pack.export();
+      if (path) {
+        showToast(t('toast.exportDone', { path }), 'info', 4000);
+      }
+    } catch (e) {
+      showToast((e as Error).message, 'error');
     }
   }, [showToast, t]);
 
   const handleBackup = useCallback(async () => {
-    const path = await window.api.pack.backup();
-    if (path) {
-      showToast(t('toast.backupDone', { path }), 'info', 4000);
+    try {
+      const path = await window.api.pack.backup();
+      if (path) {
+        showToast(t('toast.backupDone', { path }), 'info', 4000);
+      }
+    } catch (e) {
+      showToast((e as Error).message, 'error');
     }
   }, [showToast, t]);
 
   const handleRestore = useCallback(async () => {
-    const meta = await window.api.pack.restore();
-    if (meta) {
-      await loadProject(meta);
+    try {
+      const meta = await window.api.pack.restore();
+      if (meta) {
+        await loadProject(meta);
+      }
+    } catch (e) {
+      showToast((e as Error).message, 'error');
     }
-  }, [loadProject]);
+  }, [loadProject, showToast]);
 
   const handleUndo = useCallback(async () => {
-    const action = await window.api.undo.perform();
-    if (!action) {
-      return;
+    try {
+      const action = await window.api.undo.perform();
+      if (!action) {
+        return;
+      }
+      if (action.type === 'person-delete') {
+        if (selectedId === action.id) {
+          setSelectedId(null);
+          setPersonDetail(null);
+        }
+      } else {
+        const personId = action.type === 'person-undelete' ? action.id : selectedId;
+        if (action.type === 'person-undelete') {
+          setSelectedId(action.id);
+        }
+        if (personId) {
+          await refreshPerson(personId);
+        }
+      }
+      await refreshPeople();
+      if (viewRef.current === 'tree') {
+        await refreshTree(action.type === 'person-undelete' ? action.id : selectedId);
+      }
+      await refreshCanUndo();
+    } catch (e) {
+      showToast((e as Error).message, 'error');
     }
-    const personId = action.type === 'person-undelete' ? action.id : selectedId;
-    if (action.type === 'person-undelete') {
-      setSelectedId(action.id);
-    }
-    if (personId) {
-      await refreshPerson(personId);
-    }
-    await refreshPeople();
-    if (viewRef.current === 'tree') {
-      await refreshTree(personId ?? null);
-    }
-    await refreshCanUndo();
-  }, [refreshPeople, refreshPerson, refreshTree, refreshCanUndo, selectedId]);
+  }, [refreshPeople, refreshPerson, refreshTree, refreshCanUndo, selectedId, showToast]);
 
   const handleAddPerson = useCallback(async () => {
     await flushThen(async () => {
@@ -343,6 +366,9 @@ export function useMenuCommands(options: {
   handleBackup: () => Promise<void>;
   handleRestore: () => Promise<void>;
   handleUndo: () => Promise<void>;
+  showToast: (message: string, variant?: 'info' | 'error', duration?: number) => void;
+  hasProject: boolean;
+  onboardingBlocked: boolean;
 }) {
   const {
     flushThen,
@@ -356,11 +382,27 @@ export function useMenuCommands(options: {
     handleExport,
     handleBackup,
     handleRestore,
-    handleUndo
+    handleUndo,
+    showToast,
+    hasProject,
+    onboardingBlocked
   } = options;
+  const { t } = useTranslation();
 
   useEffect(() => {
     return window.api.menu.onCommand((command: MenuCommand) => {
+      const needsOnboardingGate =
+        command === 'createProject' || command === 'openProject' || command === 'import' || command === 'restore';
+      if (needsOnboardingGate && onboardingBlocked) {
+        showToast(t('errors.onboardingRequired'), 'error');
+        return;
+      }
+      const needsProject =
+        command === 'export' || command === 'backup' || command === 'sync' || command === 'syncBatch' || command === 'undo';
+      if (needsProject && !hasProject) {
+        showToast(t('errors.projectNotOpen'), 'error');
+        return;
+      }
       if (command === 'createProject') {
         void flushThen(async () => {
           const name = await promptProjectName();
@@ -390,6 +432,13 @@ export function useMenuCommands(options: {
         setSyncHelpOpen(true);
         return;
       }
+      if (command === 'copyDiagnostics') {
+        void window.api.app
+          .copyDiagnostics()
+          .then(() => showToast(t('toast.diagnosticsCopied')))
+          .catch((e) => showToast((e as Error).message, 'error'));
+        return;
+      }
       if (command === 'export') {
         void handleExport();
       }
@@ -415,6 +464,10 @@ export function useMenuCommands(options: {
     handleExport,
     handleBackup,
     handleRestore,
-    handleUndo
+    handleUndo,
+    showToast,
+    t,
+    hasProject,
+    onboardingBlocked
   ]);
 }

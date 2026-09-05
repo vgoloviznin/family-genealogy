@@ -1,5 +1,5 @@
 import { eq, and, isNull, like, or, sql } from 'drizzle-orm';
-import { getDatabase } from '../db/connection';
+import { getDatabase, withSqliteTransaction } from '../db/connection';
 import * as schema from '../db/schema';
 import { newId, nowIso } from '../utils/id';
 import { normalizePartialDate, defaultDate } from '../utils/dates';
@@ -7,6 +7,8 @@ import { getDeviceMeta } from './settings';
 import { localizedError } from '../i18n';
 import { attachThumbs, loadLifeYears, mapEvent, mapPerson, getPlaceName } from './person-mapper';
 import { getPersonDetail } from './person-detail';
+import { recordUndo, withUndoSuppressed } from './undo-stack';
+import { snapshotPersonDetail, snapshotLifeEvent } from '@shared/person-snapshot';
 import type { Person, LifeEvent, PartialDate, CreatePersonInput, UpdatePersonInput, PersonDetail } from '@shared/types';
 
 export { getPersonDetail } from './person-detail';
@@ -50,50 +52,62 @@ export async function upsertEventRecord(input: {
   longitude?: number | null;
   date?: PartialDate;
 }): Promise<LifeEvent> {
-  const db = getDatabase();
-  const meta = getDeviceMeta();
-  const ts = nowIso();
-  const date = normalizePartialDate(input.date ?? defaultDate());
-  const placeId = await upsertPlaceByName(input.placeName);
-  const id = input.id ?? newId();
+  return withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const meta = getDeviceMeta();
+    const ts = nowIso();
+    const date = normalizePartialDate(input.date ?? defaultDate());
+    const placeId = await upsertPlaceByName(input.placeName);
+    const id = input.id ?? newId();
 
-  const values = {
-    type: input.type,
-    customLabel: input.customLabel ?? null,
-    personId: input.personId ?? null,
-    familyId: input.familyId ?? null,
-    placeId,
-    description: input.description ?? null,
-    latitude: input.latitude ?? null,
-    longitude: input.longitude ?? null,
-    dateYear: date.year ?? null,
-    dateMonth: date.month ?? null,
-    dateDay: date.day ?? null,
-    dateHour: date.hour ?? null,
-    dateMinute: date.minute ?? null,
-    datePrecision: date.precision,
-    dateOriginalText: date.originalText ?? null,
-    dateSortKey: date.sortKey ?? null,
-    updatedAt: ts,
-    updatedByDeviceId: meta.deviceId,
-    updatedByLabel: meta.label || null
-  };
+    const values = {
+      type: input.type,
+      customLabel: input.customLabel ?? null,
+      personId: input.personId ?? null,
+      familyId: input.familyId ?? null,
+      placeId,
+      description: input.description ?? null,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
+      dateYear: date.year ?? null,
+      dateMonth: date.month ?? null,
+      dateDay: date.day ?? null,
+      dateHour: date.hour ?? null,
+      dateMinute: date.minute ?? null,
+      datePrecision: date.precision,
+      dateOriginalText: date.originalText ?? null,
+      dateSortKey: date.sortKey ?? null,
+      updatedAt: ts,
+      updatedByDeviceId: meta.deviceId,
+      updatedByLabel: meta.label || null
+    };
 
-  const [existing] = await db.select().from(schema.events).where(eq(schema.events.id, id));
-  if (existing) {
-    await db.update(schema.events).set(values).where(eq(schema.events.id, id));
-  } else {
-    await db.insert(schema.events).values({
-      id,
-      ...values,
-      createdAt: ts,
-      createdByDeviceId: meta.deviceId
-    });
-  }
+    const [existing] = await db.select().from(schema.events).where(eq(schema.events.id, id));
+    if (existing && !existing.deletedAt) {
+      const placeNameBefore = await getPlaceName(existing.placeId);
+      const before = snapshotLifeEvent(mapEvent(existing, placeNameBefore));
+      await db.update(schema.events).set(values).where(eq(schema.events.id, id));
+      recordUndo({ type: 'event-restore', event: before });
+    } else if (existing) {
+      await db
+        .update(schema.events)
+        .set({ ...values, deletedAt: null })
+        .where(eq(schema.events.id, id));
+      recordUndo({ type: 'event-delete', id });
+    } else {
+      await db.insert(schema.events).values({
+        id,
+        ...values,
+        createdAt: ts,
+        createdByDeviceId: meta.deviceId
+      });
+      recordUndo({ type: 'event-delete', id });
+    }
 
-  const placeName = await getPlaceName(placeId);
-  const [row] = await db.select().from(schema.events).where(eq(schema.events.id, id));
-  return mapEvent(row!, placeName);
+    const placeName = await getPlaceName(placeId);
+    const [row] = await db.select().from(schema.events).where(eq(schema.events.id, id));
+    return mapEvent(row!, placeName);
+  });
 }
 
 export async function listPeople(): Promise<Person[]> {
@@ -125,141 +139,164 @@ export async function searchPeople(query: string): Promise<Person[]> {
 }
 
 export async function createPerson(input: CreatePersonInput): Promise<PersonDetail> {
-  const db = getDatabase();
-  const meta = getDeviceMeta();
-  const ts = nowIso();
-  const id = newId();
+  return withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const meta = getDeviceMeta();
+    const ts = nowIso();
+    const id = newId();
 
-  await db.insert(schema.people).values({
-    id,
-    firstName: input.firstName.trim(),
-    lastName: input.lastName.trim(),
-    middleName: input.middleName?.trim() || null,
-    maidenName: input.maidenName?.trim() || null,
-    sex: input.sex ?? 'unknown',
-    isLiving: input.isLiving ?? true,
-    notes: input.notes?.trim() || null,
-    createdAt: ts,
-    updatedAt: ts,
-    createdByDeviceId: meta.deviceId,
-    updatedByDeviceId: meta.deviceId,
-    updatedByLabel: meta.label || null
+    await db.insert(schema.people).values({
+      id,
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+      middleName: input.middleName?.trim() || null,
+      maidenName: input.maidenName?.trim() || null,
+      sex: input.sex ?? 'unknown',
+      isLiving: input.isLiving ?? true,
+      notes: input.notes?.trim() || null,
+      createdAt: ts,
+      updatedAt: ts,
+      createdByDeviceId: meta.deviceId,
+      updatedByDeviceId: meta.deviceId,
+      updatedByLabel: meta.label || null
+    });
+
+    if (input.birth) {
+      await withUndoSuppressed(() =>
+        upsertEventRecord({
+          type: 'birth',
+          personId: id,
+          placeName: input.birth?.placeName ?? undefined,
+          description: input.birth?.description ?? undefined,
+          date: input.birth?.date ?? defaultDate()
+        })
+      );
+    }
+
+    if (input.death) {
+      await withUndoSuppressed(() =>
+        upsertEventRecord({
+          type: 'death',
+          personId: id,
+          placeName: input.death?.placeName ?? undefined,
+          description: input.death?.description ?? undefined,
+          date: input.death?.date ?? defaultDate()
+        })
+      );
+    }
+
+    if (input.burial) {
+      await withUndoSuppressed(() =>
+        upsertEventRecord({
+          type: 'burial',
+          personId: id,
+          placeName: input.burial?.placeName ?? undefined,
+          description: input.burial?.description ?? undefined,
+          latitude: input.burial?.latitude,
+          longitude: input.burial?.longitude,
+          date: input.burial?.date ?? defaultDate()
+        })
+      );
+    }
+
+    recordUndo({ type: 'person-delete', id });
+    return (await getPersonDetail(id))!;
   });
-
-  if (input.birth) {
-    await upsertEventRecord({
-      type: 'birth',
-      personId: id,
-      placeName: input.birth.placeName ?? undefined,
-      description: input.birth.description ?? undefined,
-      date: input.birth.date ?? defaultDate()
-    });
-  }
-
-  if (input.death) {
-    await upsertEventRecord({
-      type: 'death',
-      personId: id,
-      placeName: input.death.placeName ?? undefined,
-      description: input.death.description ?? undefined,
-      date: input.death.date ?? defaultDate()
-    });
-  }
-
-  if (input.burial) {
-    await upsertEventRecord({
-      type: 'burial',
-      personId: id,
-      placeName: input.burial.placeName ?? undefined,
-      description: input.burial.description ?? undefined,
-      latitude: input.burial.latitude,
-      longitude: input.burial.longitude,
-      date: input.burial.date ?? defaultDate()
-    });
-  }
-
-  return (await getPersonDetail(id))!;
 }
 
 export async function updatePerson(input: UpdatePersonInput): Promise<PersonDetail> {
-  const db = getDatabase();
-  const meta = getDeviceMeta();
-  const ts = nowIso();
-
-  await db
-    .update(schema.people)
-    .set({
-      firstName: input.firstName?.trim(),
-      lastName: input.lastName?.trim(),
-      middleName: input.middleName?.trim() || null,
-      maidenName: input.maidenName?.trim() || null,
-      sex: input.sex,
-      isLiving: input.isLiving,
-      notes: input.notes?.trim() || null,
-      updatedAt: ts,
-      updatedByDeviceId: meta.deviceId,
-      updatedByLabel: meta.label || null
-    })
-    .where(eq(schema.people.id, input.id));
-
-  const detail = await getPersonDetail(input.id);
-  if (!detail) {
-    throw new Error(localizedError('errors.personNotFound'));
-  }
-
-  if (input.birth !== undefined) {
-    const birthId = detail.birthEvent?.id;
-    await upsertEventRecord({
-      id: birthId,
-      type: 'birth',
-      personId: input.id,
-      placeName: input.birth?.placeName ?? undefined,
-      description: input.birth?.description ?? undefined,
-      date: input.birth?.date ?? defaultDate()
-    });
-  }
-
-  if (input.death === null) {
-    if (detail.deathEvent?.id) {
-      await deleteEvent(detail.deathEvent.id);
+  return withSqliteTransaction(async () => {
+    const beforeDetail = await getPersonDetail(input.id);
+    if (!beforeDetail) {
+      throw new Error(localizedError('errors.personNotFound'));
     }
-  } else if (input.death !== undefined) {
-    const deathId = detail.deathEvent?.id;
-    await upsertEventRecord({
-      id: deathId,
-      type: 'death',
-      personId: input.id,
-      placeName: input.death?.placeName ?? undefined,
-      description: input.death?.description ?? undefined,
-      date: input.death?.date ?? defaultDate()
-    });
-  }
+    const before = snapshotPersonDetail(beforeDetail);
 
-  if (input.burial === null) {
-    if (detail.burialEvent?.id) {
-      await deleteEvent(detail.burialEvent.id);
+    const db = getDatabase();
+    const meta = getDeviceMeta();
+    const ts = nowIso();
+
+    await db
+      .update(schema.people)
+      .set({
+        firstName: input.firstName?.trim(),
+        lastName: input.lastName?.trim(),
+        middleName: input.middleName?.trim() || null,
+        maidenName: input.maidenName?.trim() || null,
+        sex: input.sex,
+        isLiving: input.isLiving,
+        notes: input.notes?.trim() || null,
+        updatedAt: ts,
+        updatedByDeviceId: meta.deviceId,
+        updatedByLabel: meta.label || null
+      })
+      .where(eq(schema.people.id, input.id));
+
+    const detail = await getPersonDetail(input.id);
+    if (!detail) {
+      throw new Error(localizedError('errors.personNotFound'));
     }
-  } else if (input.burial !== undefined) {
-    const burialId = detail.burialEvent?.id;
-    await upsertEventRecord({
-      id: burialId,
-      type: 'burial',
-      personId: input.id,
-      placeName: input.burial?.placeName ?? undefined,
-      description: input.burial?.description ?? detail.burialEvent?.description ?? undefined,
-      latitude: input.burial?.latitude ?? null,
-      longitude: input.burial?.longitude ?? null,
-      date: input.burial?.date ?? detail.burialEvent?.date ?? defaultDate()
-    });
-  }
 
-  return (await getPersonDetail(input.id))!;
+    await withUndoSuppressed(async () => {
+      if (input.birth !== undefined) {
+        const birthId = detail.birthEvent?.id;
+        await upsertEventRecord({
+          id: birthId,
+          type: 'birth',
+          personId: input.id,
+          placeName: input.birth?.placeName ?? undefined,
+          description: input.birth?.description ?? undefined,
+          date: input.birth?.date ?? defaultDate()
+        });
+      }
+
+      if (input.death === null) {
+        if (detail.deathEvent?.id) {
+          await deleteEvent(detail.deathEvent.id);
+        }
+      } else if (input.death !== undefined) {
+        const deathId = detail.deathEvent?.id;
+        await upsertEventRecord({
+          id: deathId,
+          type: 'death',
+          personId: input.id,
+          placeName: input.death?.placeName ?? undefined,
+          description: input.death?.description ?? undefined,
+          date: input.death?.date ?? defaultDate()
+        });
+      }
+
+      if (input.burial === null) {
+        if (detail.burialEvent?.id) {
+          await deleteEvent(detail.burialEvent.id);
+        }
+      } else if (input.burial !== undefined) {
+        const burialId = detail.burialEvent?.id;
+        await upsertEventRecord({
+          id: burialId,
+          type: 'burial',
+          personId: input.id,
+          placeName: input.burial?.placeName ?? undefined,
+          description: input.burial?.description ?? detail.burialEvent?.description ?? undefined,
+          latitude: input.burial?.latitude ?? null,
+          longitude: input.burial?.longitude ?? null,
+          date: input.burial?.date ?? detail.burialEvent?.date ?? defaultDate()
+        });
+      }
+    });
+
+    recordUndo({ type: 'person-update', before });
+    return (await getPersonDetail(input.id))!;
+  });
 }
 
 export async function deletePerson(id: string): Promise<void> {
-  const db = getDatabase();
-  const ts = nowIso();
-  await db.update(schema.people).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.people.id, id));
+  await withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const ts = nowIso();
+    await db.update(schema.people).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.people.id, id));
+    recordUndo({ type: 'person-undelete', id });
+  });
 }
 
 export async function restorePerson(id: string): Promise<void> {
@@ -283,9 +320,16 @@ export async function listEventsForPerson(personId: string): Promise<LifeEvent[]
 }
 
 export async function deleteEvent(id: string): Promise<void> {
-  const db = getDatabase();
-  const ts = nowIso();
-  await db.update(schema.events).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.events.id, id));
+  await withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const [existing] = await db.select().from(schema.events).where(eq(schema.events.id, id));
+    if (existing && !existing.deletedAt) {
+      const placeName = await getPlaceName(existing.placeId);
+      recordUndo({ type: 'event-restore', event: snapshotLifeEvent(mapEvent(existing, placeName)) });
+    }
+    const ts = nowIso();
+    await db.update(schema.events).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.events.id, id));
+  });
 }
 
 export async function restoreEvent(input: {
@@ -300,13 +344,15 @@ export async function restoreEvent(input: {
   longitude?: number | null;
   date?: PartialDate;
 }): Promise<LifeEvent> {
-  const db = getDatabase();
-  const ts = nowIso();
-  const [existing] = await db.select().from(schema.events).where(eq(schema.events.id, input.id));
-  if (existing) {
-    await db.update(schema.events).set({ deletedAt: null, updatedAt: ts }).where(eq(schema.events.id, input.id));
-  }
-  return upsertEventRecord(input);
+  return withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const ts = nowIso();
+    const [existing] = await db.select().from(schema.events).where(eq(schema.events.id, input.id));
+    if (existing) {
+      await db.update(schema.events).set({ deletedAt: null, updatedAt: ts }).where(eq(schema.events.id, input.id));
+    }
+    return withUndoSuppressed(() => upsertEventRecord(input));
+  });
 }
 
 export async function searchPlaces(query: string): Promise<Array<{ id: string; name: string }>> {

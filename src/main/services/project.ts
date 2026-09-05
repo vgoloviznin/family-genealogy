@@ -5,7 +5,7 @@ import { openDatabase, closeDatabase } from '../db/connection';
 import { SCHEMA_VERSION } from '../db/schema';
 import { newId, nowIso } from '../utils/id';
 import { isCloudSyncedPath } from '../utils/paths';
-import { addRecentProject, getSettings, pruneRecentProjects } from './settings';
+import { addRecentProject, getSettings, pruneRecentProjects, assertOnboardingComplete } from './settings';
 import { clearUndo } from './undo';
 import { localizedError, t, getAppLocale } from '../i18n';
 import type { ProjectMeta, RecentProject } from '@shared/types';
@@ -44,6 +44,7 @@ function ensureProjectDirs(projectPath: string): void {
 }
 
 export async function createProject(name: string): Promise<ProjectMeta | null> {
+  assertOnboardingComplete();
   const result = await dialog.showOpenDialog({
     title: t(getAppLocale(), 'dialog.createProjectFolder'),
     properties: ['openDirectory', 'createDirectory']
@@ -62,14 +63,15 @@ export async function createProject(name: string): Promise<ProjectMeta | null> {
   const projectJson: ProjectJson = {
     projectId: newId(),
     name,
-    schemaVersion: SCHEMA_VERSION,
+    schemaVersion: 0,
     createdAt: nowIso()
   };
   writeProjectJson(projectPath, projectJson);
-  return openProjectAtPath(projectPath);
+  return openProjectAtPath(projectPath, { createIfMissing: true });
 }
 
 export async function openProject(): Promise<ProjectMeta | null> {
+  assertOnboardingComplete();
   const result = await dialog.showOpenDialog({
     title: t(getAppLocale(), 'dialog.openProject'),
     properties: ['openDirectory']
@@ -80,19 +82,28 @@ export async function openProject(): Promise<ProjectMeta | null> {
   return openProjectAtPath(result.filePaths[0]);
 }
 
-export function openProjectAtPath(projectPath: string): ProjectMeta {
+export function openProjectAtPath(projectPath: string, options?: { createIfMissing?: boolean }): ProjectMeta {
   const dbFile = join(projectPath, 'family.sqlite');
   const jsonFile = join(projectPath, 'project.json');
   if (!existsSync(jsonFile)) {
     throw new Error(localizedError('errors.notAProject'));
   }
+
+  const json = readProjectJson(projectPath);
+  if (typeof json.schemaVersion === 'number' && json.schemaVersion > SCHEMA_VERSION) {
+    throw new Error(localizedError('errors.projectNewerVersion'));
+  }
+
   if (!existsSync(dbFile)) {
+    if (!options?.createIfMissing) {
+      throw new Error(localizedError('errors.databaseMissing'));
+    }
     ensureProjectDirs(projectPath);
   }
 
   closeProject();
   openDatabase(projectPath);
-  const json = readProjectJson(projectPath);
+
   const cloudWarning = isCloudSyncedPath(projectPath);
 
   currentProject = {
@@ -104,7 +115,7 @@ export function openProjectAtPath(projectPath: string): ProjectMeta {
     cloudWarning
   };
 
-  if (json.schemaVersion !== SCHEMA_VERSION) {
+  if (json.schemaVersion < SCHEMA_VERSION) {
     json.schemaVersion = SCHEMA_VERSION;
     writeProjectJson(projectPath, json);
     currentProject.schemaVersion = SCHEMA_VERSION;

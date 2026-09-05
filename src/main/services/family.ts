@@ -1,11 +1,12 @@
-import { eq, and, isNull } from 'drizzle-orm';
-import { getDatabase } from '../db/connection';
+import { eq, and, isNull, sql } from 'drizzle-orm';
+import { getDatabase, withSqliteTransaction } from '../db/connection';
 import * as schema from '../db/schema';
 import { newId, nowIso } from '../utils/id';
 import { getDeviceMeta } from './settings';
 import { createPerson } from './people';
 import { getPersonDetail } from './person-detail';
 import { getFamiliesForPerson } from './family-query';
+import { recordUndo, withUndoSuppressed } from './undo-stack';
 import type { CreatePersonInput, PedigreeType, PersonDetail, UnionType } from '@shared/types';
 import { localizedError } from '../i18n';
 
@@ -13,42 +14,26 @@ export { getFamiliesForPerson } from './family-query';
 
 async function countActiveFamilyChildren(familyId: string): Promise<number> {
   const db = getDatabase();
-  const childRows = await db
-    .select()
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
     .from(schema.familyChildren)
-    .where(and(eq(schema.familyChildren.familyId, familyId), isNull(schema.familyChildren.deletedAt)));
-
-  let count = 0;
-  for (const row of childRows) {
-    const [person] = await db
-      .select({ id: schema.people.id })
-      .from(schema.people)
-      .where(and(eq(schema.people.id, row.personId), isNull(schema.people.deletedAt)));
-    if (person) {
-      count++;
-    }
-  }
-  return count;
+    .innerJoin(schema.people, eq(schema.familyChildren.personId, schema.people.id))
+    .where(
+      and(eq(schema.familyChildren.familyId, familyId), isNull(schema.familyChildren.deletedAt), isNull(schema.people.deletedAt))
+    );
+  return Number(row?.count ?? 0);
 }
 
 async function countActiveFamilyPartners(familyId: string): Promise<number> {
   const db = getDatabase();
-  const partnerRows = await db
-    .select()
+  const [row] = await db
+    .select({ count: sql<number>`count(*)` })
     .from(schema.familyPartners)
-    .where(and(eq(schema.familyPartners.familyId, familyId), isNull(schema.familyPartners.deletedAt)));
-
-  let count = 0;
-  for (const row of partnerRows) {
-    const [person] = await db
-      .select({ id: schema.people.id })
-      .from(schema.people)
-      .where(and(eq(schema.people.id, row.personId), isNull(schema.people.deletedAt)));
-    if (person) {
-      count++;
-    }
-  }
-  return count;
+    .innerJoin(schema.people, eq(schema.familyPartners.personId, schema.people.id))
+    .where(
+      and(eq(schema.familyPartners.familyId, familyId), isNull(schema.familyPartners.deletedAt), isNull(schema.people.deletedAt))
+    );
+  return Number(row?.count ?? 0);
 }
 
 async function ensureFamilyActive(familyId: string): Promise<void> {
@@ -119,36 +104,42 @@ async function linkChild(familyId: string, personId: string, pedigree: PedigreeT
 }
 
 export async function addPartner(personId: string, partnerInput: CreatePersonInput, unionType: UnionType = 'marriage'): Promise<PersonDetail> {
-  const partner = await createPerson(partnerInput);
+  return withSqliteTransaction(async () => {
+    const partner = await withUndoSuppressed(() => createPerson(partnerInput));
 
-  const existingFamilies = await getFamiliesForPerson(personId);
-  const partnerFamily = existingFamilies.find((f) => f.partners.length === 1 && f.partners[0]?.id === personId);
+    const existingFamilies = await getFamiliesForPerson(personId);
+    const partnerFamily = existingFamilies.find((f) => f.partners.length === 1 && f.partners[0]?.id === personId);
 
-  let familyId: string;
-  if (partnerFamily) {
-    familyId = partnerFamily.id;
-    await linkPartner(familyId, partner.id, 1);
-  } else {
-    familyId = await createFamily(unionType);
-    await linkPartner(familyId, personId, 0);
-    await linkPartner(familyId, partner.id, 1);
-  }
+    let familyId: string;
+    if (partnerFamily) {
+      familyId = partnerFamily.id;
+      await linkPartner(familyId, partner.id, 1);
+    } else {
+      familyId = await createFamily(unionType);
+      await linkPartner(familyId, personId, 0);
+      await linkPartner(familyId, partner.id, 1);
+    }
 
-  return (await getPersonDetail(partner.id))!;
+    recordUndo({ type: 'family-unlink-partner', familyId, personId: partner.id }, { type: 'person-delete', id: partner.id });
+    return (await getPersonDetail(partner.id))!;
+  });
 }
 
 export async function addChildToFamily(familyId: string, childInput: CreatePersonInput, pedigree: PedigreeType = 'birth'): Promise<PersonDetail> {
-  const child = await createPerson(childInput);
-  await linkChild(familyId, child.id, pedigree);
-  const partners = await getDatabase()
-    .select()
-    .from(schema.familyPartners)
-    .where(and(eq(schema.familyPartners.familyId, familyId), isNull(schema.familyPartners.deletedAt)));
-  const parentId = partners[0]?.personId;
-  if (!parentId) {
-    throw new Error(localizedError('errors.familyNoParent'));
-  }
-  return (await getPersonDetail(child.id))!;
+  return withSqliteTransaction(async () => {
+    const partners = await getDatabase()
+      .select()
+      .from(schema.familyPartners)
+      .where(and(eq(schema.familyPartners.familyId, familyId), isNull(schema.familyPartners.deletedAt)));
+    if (!partners[0]?.personId) {
+      throw new Error(localizedError('errors.familyNoParent'));
+    }
+
+    const child = await withUndoSuppressed(() => createPerson(childInput));
+    await linkChild(familyId, child.id, pedigree);
+    recordUndo({ type: 'family-unlink-child', familyId, personId: child.id }, { type: 'person-delete', id: child.id });
+    return (await getPersonDetail(child.id))!;
+  });
 }
 
 export async function addParents(
@@ -156,33 +147,80 @@ export async function addParents(
   parentInputs: [CreatePersonInput, CreatePersonInput?],
   pedigree: PedigreeType = 'birth'
 ): Promise<PersonDetail> {
-  const familyId = await createFamily('partnership');
-  const parent1 = await createPerson(parentInputs[0]);
-  await linkPartner(familyId, parent1.id, 0);
+  return withSqliteTransaction(async () => {
+    const familyId = await createFamily('partnership');
+    const parent1 = await withUndoSuppressed(() => createPerson(parentInputs[0]));
+    await linkPartner(familyId, parent1.id, 0);
 
-  if (parentInputs[1]) {
-    const parent2 = await createPerson(parentInputs[1]);
-    await linkPartner(familyId, parent2.id, 1);
-  }
+    const undos: Parameters<typeof recordUndo> = [
+      { type: 'family-unlink-child', familyId, personId },
+      { type: 'family-unlink-partner', familyId, personId: parent1.id },
+      { type: 'person-delete', id: parent1.id }
+    ];
 
-  await linkChild(familyId, personId, pedigree);
-  return (await getPersonDetail(parent1.id))!;
+    if (parentInputs[1]) {
+      const parent2 = await withUndoSuppressed(() => createPerson(parentInputs[1]!));
+      await linkPartner(familyId, parent2.id, 1);
+      undos.push({ type: 'family-unlink-partner', familyId, personId: parent2.id }, { type: 'person-delete', id: parent2.id });
+    }
+
+    await linkChild(familyId, personId, pedigree);
+    recordUndo(...undos);
+    return (await getPersonDetail(parent1.id))!;
+  });
 }
 
-export async function getOrCreateFamilyForNewChild(personId: string): Promise<string> {
+export async function getOrCreateFamilyForNewChild(personId: string, familyId?: string | 'new'): Promise<string> {
   const families = await getFamiliesForPerson(personId);
-  const asPartner = families.find((f) => f.partners.some((p) => p.id === personId));
-  if (asPartner) {
-    return asPartner.id;
+  const asPartner = families.filter((f) => f.partners.some((p) => p.id === personId));
+
+  if (familyId === 'new') {
+    const id = await createFamily('marriage');
+    await linkPartner(id, personId, 0);
+    return id;
   }
-  const familyId = await createFamily('marriage');
-  await linkPartner(familyId, personId, 0);
-  return familyId;
+
+  if (familyId) {
+    const match = asPartner.find((f) => f.id === familyId);
+    if (!match) {
+      throw new Error(localizedError('errors.familyLinkNotFound'));
+    }
+    return match.id;
+  }
+
+  if (asPartner.length === 0) {
+    const id = await createFamily('marriage');
+    await linkPartner(id, personId, 0);
+    return id;
+  }
+
+  if (asPartner.length === 1) {
+    return asPartner[0]!.id;
+  }
+
+  throw new Error(localizedError('errors.familyChoiceRequired'));
 }
 
-export async function addChildToPerson(personId: string, childInput: CreatePersonInput, pedigree: PedigreeType = 'birth'): Promise<PersonDetail> {
-  const familyId = await getOrCreateFamilyForNewChild(personId);
-  return addChildToFamily(familyId, childInput, pedigree);
+export async function addChildToPerson(
+  personId: string,
+  childInput: CreatePersonInput,
+  pedigree: PedigreeType = 'birth',
+  familyId?: string | 'new'
+): Promise<PersonDetail> {
+  return withSqliteTransaction(async () => {
+    const resolvedFamilyId = await getOrCreateFamilyForNewChild(personId, familyId);
+    const partners = await getDatabase()
+      .select()
+      .from(schema.familyPartners)
+      .where(and(eq(schema.familyPartners.familyId, resolvedFamilyId), isNull(schema.familyPartners.deletedAt)));
+    if (!partners[0]?.personId) {
+      throw new Error(localizedError('errors.familyNoParent'));
+    }
+    const child = await withUndoSuppressed(() => createPerson(childInput));
+    await linkChild(resolvedFamilyId, child.id, pedigree);
+    recordUndo({ type: 'family-unlink-child', familyId: resolvedFamilyId, personId: child.id }, { type: 'person-delete', id: child.id });
+    return (await getPersonDetail(child.id))!;
+  });
 }
 
 async function getOrCreateFamilyForSibling(personId: string): Promise<string> {
@@ -197,77 +235,96 @@ async function getOrCreateFamilyForSibling(personId: string): Promise<string> {
 }
 
 export async function addSibling(personId: string, siblingInput: CreatePersonInput, pedigree: PedigreeType = 'birth'): Promise<PersonDetail> {
-  const familyId = await getOrCreateFamilyForSibling(personId);
-  const sibling = await createPerson(siblingInput);
-  await linkChild(familyId, sibling.id, pedigree);
-  return (await getPersonDetail(sibling.id))!;
+  return withSqliteTransaction(async () => {
+    const familyId = await getOrCreateFamilyForSibling(personId);
+    const sibling = await withUndoSuppressed(() => createPerson(siblingInput));
+    await linkChild(familyId, sibling.id, pedigree);
+    recordUndo({ type: 'family-unlink-child', familyId, personId: sibling.id }, { type: 'person-delete', id: sibling.id });
+    return (await getPersonDetail(sibling.id))!;
+  });
 }
 
 export async function linkExistingSibling(personId: string, siblingId: string, pedigree: PedigreeType = 'birth'): Promise<void> {
   if (personId === siblingId) {
     throw new Error(localizedError('errors.cannotSelfSibling'));
   }
-  const familyId = await getOrCreateFamilyForSibling(personId);
-  await linkChildToFamily(familyId, siblingId, pedigree);
+  await withSqliteTransaction(async () => {
+    const familyId = await getOrCreateFamilyForSibling(personId);
+    await assertAndLinkChild(familyId, siblingId, pedigree);
+    recordUndo({ type: 'family-unlink-child', familyId, personId: siblingId });
+  });
 }
 
 export async function linkExistingPartner(personId: string, partnerId: string, unionType: UnionType = 'marriage'): Promise<void> {
   if (personId === partnerId) {
     throw new Error(localizedError('errors.cannotLinkSelf'));
   }
-  const families = await getFamiliesForPerson(personId);
-  const already = families.some((f) => f.partners.some((p) => p.id === partnerId));
-  if (already) {
-    throw new Error(localizedError('errors.alreadySpouses'));
-  }
+  await withSqliteTransaction(async () => {
+    const families = await getFamiliesForPerson(personId);
+    const already = families.some((f) => f.partners.some((p) => p.id === partnerId));
+    if (already) {
+      throw new Error(localizedError('errors.alreadySpouses'));
+    }
 
-  const partnerFamily = families.find((f) => f.partners.length === 1 && f.partners[0]?.id === personId);
-  let familyId: string;
-  if (partnerFamily) {
-    familyId = partnerFamily.id;
-    await linkPartner(familyId, partnerId, 1);
-  } else {
-    familyId = await createFamily(unionType);
-    await linkPartner(familyId, personId, 0);
-    await linkPartner(familyId, partnerId, 1);
-  }
+    const partnerFamily = families.find((f) => f.partners.length === 1 && f.partners[0]?.id === personId);
+    let familyId: string;
+    if (partnerFamily) {
+      familyId = partnerFamily.id;
+      await linkPartner(familyId, partnerId, 1);
+    } else {
+      familyId = await createFamily(unionType);
+      await linkPartner(familyId, personId, 0);
+      await linkPartner(familyId, partnerId, 1);
+    }
+    recordUndo({ type: 'family-unlink-partner', familyId, personId: partnerId });
+  });
 }
 
-export async function linkExistingChild(personId: string, childId: string, pedigree: PedigreeType = 'birth'): Promise<void> {
+export async function linkExistingChild(personId: string, childId: string, pedigree: PedigreeType = 'birth', familyId?: string | 'new'): Promise<void> {
   if (personId === childId) {
     throw new Error(localizedError('errors.cannotSelfChild'));
   }
-  const familyId = await getOrCreateFamilyForNewChild(personId);
-  await linkChildToFamily(familyId, childId, pedigree);
+  await withSqliteTransaction(async () => {
+    const resolved = await getOrCreateFamilyForNewChild(personId, familyId);
+    await assertAndLinkChild(resolved, childId, pedigree);
+    recordUndo({ type: 'family-unlink-child', familyId: resolved, personId: childId });
+  });
 }
 
 export async function linkExistingParent(personId: string, parentId: string, pedigree: PedigreeType = 'birth'): Promise<void> {
   if (personId === parentId) {
     throw new Error(localizedError('errors.cannotSelfParent'));
   }
-  const families = await getFamiliesForPerson(personId);
-  const asChild = families.find((f) => f.children.some((c) => c.person.id === personId));
-  if (asChild) {
-    if (asChild.partners.some((p) => p.id === parentId)) {
-      throw new Error(localizedError('errors.alreadyParent'));
+  await withSqliteTransaction(async () => {
+    const families = await getFamiliesForPerson(personId);
+    const asChild = families.find((f) => f.children.some((c) => c.person.id === personId));
+    if (asChild) {
+      if (asChild.partners.some((p) => p.id === parentId)) {
+        throw new Error(localizedError('errors.alreadyParent'));
+      }
+      await linkPartner(asChild.id, parentId, asChild.partners.length);
+      recordUndo({ type: 'family-unlink-partner', familyId: asChild.id, personId: parentId });
+      return;
     }
-    await linkPartner(asChild.id, parentId, asChild.partners.length);
-    return;
-  }
-  const familyId = await createFamily('partnership');
-  await linkPartner(familyId, parentId, 0);
-  await linkChild(familyId, personId, pedigree);
+    const familyId = await createFamily('partnership');
+    await linkPartner(familyId, parentId, 0);
+    await linkChild(familyId, personId, pedigree);
+    recordUndo({ type: 'family-unlink-partner', familyId, personId: parentId }, { type: 'family-unlink-child', familyId, personId });
+  });
 }
 
 export async function linkPartnerToFamily(familyId: string, personId: string): Promise<void> {
-  const families = await getFamiliesForPerson(personId);
-  if (families.some((f) => f.id === familyId && f.partners.some((p) => p.id === personId))) {
-    throw new Error(localizedError('errors.alreadyInUnion'));
-  }
-  await linkPartner(familyId, personId, 1);
+  await withSqliteTransaction(async () => {
+    const families = await getFamiliesForPerson(personId);
+    if (families.some((f) => f.id === familyId && f.partners.some((p) => p.id === personId))) {
+      throw new Error(localizedError('errors.alreadyInUnion'));
+    }
+    await linkPartner(familyId, personId, 1);
+    recordUndo({ type: 'family-unlink-partner', familyId, personId });
+  });
 }
 
-export async function linkChildToFamily(familyId: string, childId: string, pedigree: PedigreeType = 'birth'): Promise<void> {
+async function assertAndLinkChild(familyId: string, childId: string, pedigree: PedigreeType = 'birth'): Promise<void> {
   const db = getDatabase();
   const [existing] = await db
     .select()
@@ -279,115 +336,139 @@ export async function linkChildToFamily(familyId: string, childId: string, pedig
   await linkChild(familyId, childId, pedigree);
 }
 
-export async function unlinkPartner(familyId: string, personId: string): Promise<void> {
-  const db = getDatabase();
-  const [link] = await db
-    .select()
-    .from(schema.familyPartners)
-    .where(and(eq(schema.familyPartners.familyId, familyId), eq(schema.familyPartners.personId, personId), isNull(schema.familyPartners.deletedAt)));
-  if (!link) {
-    throw new Error(localizedError('errors.familyLinkNotFound'));
-  }
+export async function linkChildToFamily(familyId: string, childId: string, pedigree: PedigreeType = 'birth'): Promise<void> {
+  await withSqliteTransaction(async () => {
+    await assertAndLinkChild(familyId, childId, pedigree);
+    recordUndo({ type: 'family-unlink-child', familyId, personId: childId });
+  });
+}
 
-  const ts = nowIso();
-  await db.update(schema.familyPartners).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.familyPartners.id, link.id));
-  await cleanupEmptyFamily(familyId);
+export async function unlinkPartner(familyId: string, personId: string): Promise<void> {
+  await withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const [link] = await db
+      .select()
+      .from(schema.familyPartners)
+      .where(and(eq(schema.familyPartners.familyId, familyId), eq(schema.familyPartners.personId, personId), isNull(schema.familyPartners.deletedAt)));
+    if (!link) {
+      throw new Error(localizedError('errors.familyLinkNotFound'));
+    }
+
+    const ts = nowIso();
+    await db.update(schema.familyPartners).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.familyPartners.id, link.id));
+    await cleanupEmptyFamily(familyId);
+    recordUndo({ type: 'family-relink-partner', familyId, personId });
+  });
 }
 
 export async function unlinkChild(familyId: string, personId: string): Promise<void> {
-  const db = getDatabase();
-  const [link] = await db
-    .select()
-    .from(schema.familyChildren)
-    .where(and(eq(schema.familyChildren.familyId, familyId), eq(schema.familyChildren.personId, personId), isNull(schema.familyChildren.deletedAt)));
-  if (!link) {
-    throw new Error(localizedError('errors.familyLinkNotFound'));
-  }
+  await withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const [link] = await db
+      .select()
+      .from(schema.familyChildren)
+      .where(and(eq(schema.familyChildren.familyId, familyId), eq(schema.familyChildren.personId, personId), isNull(schema.familyChildren.deletedAt)));
+    if (!link) {
+      throw new Error(localizedError('errors.familyLinkNotFound'));
+    }
 
-  const ts = nowIso();
-  await db.update(schema.familyChildren).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.familyChildren.id, link.id));
-  await cleanupEmptyFamily(familyId);
+    const pedigree = (link.pedigree as PedigreeType) || 'birth';
+    const ts = nowIso();
+    await db.update(schema.familyChildren).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.familyChildren.id, link.id));
+    await cleanupEmptyFamily(familyId);
+    recordUndo({ type: 'family-relink-child', familyId, personId, pedigree });
+  });
 }
 
 export async function relinkPartner(familyId: string, personId: string): Promise<void> {
-  const db = getDatabase();
-  const ts = nowIso();
-  await ensureFamilyActive(familyId);
-  const rows = await db
-    .select()
-    .from(schema.familyPartners)
-    .where(and(eq(schema.familyPartners.familyId, familyId), eq(schema.familyPartners.personId, personId)));
-  const last = rows.at(-1);
-  if (last) {
-    await db.update(schema.familyPartners).set({ deletedAt: null, updatedAt: ts }).where(eq(schema.familyPartners.id, last.id));
-    return;
-  }
-  await linkPartner(familyId, personId, 0);
+  await withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const ts = nowIso();
+    await ensureFamilyActive(familyId);
+    const rows = await db
+      .select()
+      .from(schema.familyPartners)
+      .where(and(eq(schema.familyPartners.familyId, familyId), eq(schema.familyPartners.personId, personId)));
+    const last = rows.at(-1);
+    if (last) {
+      await db.update(schema.familyPartners).set({ deletedAt: null, updatedAt: ts }).where(eq(schema.familyPartners.id, last.id));
+      return;
+    }
+    await linkPartner(familyId, personId, 0);
+  });
 }
 
 export async function relinkChild(familyId: string, personId: string, pedigree: PedigreeType = 'birth'): Promise<void> {
-  const db = getDatabase();
-  const ts = nowIso();
-  await ensureFamilyActive(familyId);
-  const rows = await db
-    .select()
-    .from(schema.familyChildren)
-    .where(and(eq(schema.familyChildren.familyId, familyId), eq(schema.familyChildren.personId, personId)));
-  const last = rows.at(-1);
-  if (last) {
-    await db.update(schema.familyChildren).set({ deletedAt: null, updatedAt: ts, pedigree }).where(eq(schema.familyChildren.id, last.id));
-    return;
-  }
-  await linkChild(familyId, personId, pedigree);
+  await withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const ts = nowIso();
+    await ensureFamilyActive(familyId);
+    const rows = await db
+      .select()
+      .from(schema.familyChildren)
+      .where(and(eq(schema.familyChildren.familyId, familyId), eq(schema.familyChildren.personId, personId)));
+    const last = rows.at(-1);
+    if (last) {
+      await db.update(schema.familyChildren).set({ deletedAt: null, updatedAt: ts, pedigree }).where(eq(schema.familyChildren.id, last.id));
+      return;
+    }
+    await linkChild(familyId, personId, pedigree);
+  });
 }
 
 export async function setUnionType(familyId: string, unionType: UnionType): Promise<void> {
-  const db = getDatabase();
-  const ts = nowIso();
-  await db.update(schema.families).set({ unionType, updatedAt: ts }).where(eq(schema.families.id, familyId));
+  await withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const ts = nowIso();
+    await db.update(schema.families).set({ unionType, updatedAt: ts }).where(eq(schema.families.id, familyId));
+  });
 }
 
 export async function dissolveUnion(familyId: string, personId: string): Promise<void> {
-  const db = getDatabase();
-  const ts = nowIso();
+  await withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const ts = nowIso();
 
-  const [membership] = await db
-    .select()
-    .from(schema.familyPartners)
-    .where(and(eq(schema.familyPartners.familyId, familyId), eq(schema.familyPartners.personId, personId), isNull(schema.familyPartners.deletedAt)));
-  if (!membership) {
-    throw new Error(localizedError('errors.notInUnion'));
-  }
+    const [membership] = await db
+      .select()
+      .from(schema.familyPartners)
+      .where(and(eq(schema.familyPartners.familyId, familyId), eq(schema.familyPartners.personId, personId), isNull(schema.familyPartners.deletedAt)));
+    if (!membership) {
+      throw new Error(localizedError('errors.notInUnion'));
+    }
 
-  if ((await countActiveFamilyChildren(familyId)) > 0) {
-    throw new Error(localizedError('errors.cannotDissolveWithChildren'));
-  }
+    if ((await countActiveFamilyChildren(familyId)) > 0) {
+      throw new Error(localizedError('errors.cannotDissolveWithChildren'));
+    }
 
-  const childRows = await db
-    .select()
-    .from(schema.familyChildren)
-    .where(and(eq(schema.familyChildren.familyId, familyId), isNull(schema.familyChildren.deletedAt)));
-  for (const child of childRows) {
-    await db.update(schema.familyChildren).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.familyChildren.id, child.id));
-  }
+    const childRows = await db
+      .select()
+      .from(schema.familyChildren)
+      .where(and(eq(schema.familyChildren.familyId, familyId), isNull(schema.familyChildren.deletedAt)));
+    for (const child of childRows) {
+      await db.update(schema.familyChildren).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.familyChildren.id, child.id));
+    }
 
-  const partners = await db
-    .select()
-    .from(schema.familyPartners)
-    .where(and(eq(schema.familyPartners.familyId, familyId), isNull(schema.familyPartners.deletedAt)));
+    const partners = await db
+      .select()
+      .from(schema.familyPartners)
+      .where(and(eq(schema.familyPartners.familyId, familyId), isNull(schema.familyPartners.deletedAt)));
 
-  for (const partner of partners) {
-    await db.update(schema.familyPartners).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.familyPartners.id, partner.id));
-  }
+    for (const partner of partners) {
+      await db.update(schema.familyPartners).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.familyPartners.id, partner.id));
+    }
 
-  await db.update(schema.families).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.families.id, familyId));
+    await db.update(schema.families).set({ deletedAt: ts, updatedAt: ts }).where(eq(schema.families.id, familyId));
+  });
 }
 
 export async function setChildPedigree(familyId: string, childId: string, pedigree: PedigreeType): Promise<void> {
-  const db = getDatabase();
-  const ts = nowIso();
-  await db
-    .update(schema.familyChildren)
-    .set({ pedigree, updatedAt: ts })
-    .where(and(eq(schema.familyChildren.familyId, familyId), eq(schema.familyChildren.personId, childId), isNull(schema.familyChildren.deletedAt)));
+  await withSqliteTransaction(async () => {
+    const db = getDatabase();
+    const ts = nowIso();
+    await db
+      .update(schema.familyChildren)
+      .set({ pedigree, updatedAt: ts })
+      .where(and(eq(schema.familyChildren.familyId, familyId), eq(schema.familyChildren.personId, childId), isNull(schema.familyChildren.deletedAt)));
+  });
 }

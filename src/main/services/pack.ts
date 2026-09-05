@@ -7,7 +7,7 @@ import { ZipArchive } from 'archiver';
 import { extractZip } from '../utils/safe-extract-zip';
 import { checkpointDatabase } from '../db/connection';
 import { getProjectJson, openProjectAtPath, requireProject, closeProject } from './project';
-import { getSettings } from './settings';
+import { getSettings, assertOnboardingComplete } from './settings';
 import { clearUndo } from './undo';
 import { mergeIncomingDatabase } from './merge';
 import { SCHEMA_VERSION } from '../db/schema';
@@ -21,6 +21,7 @@ import type {
 } from '@shared/merge-types';
 import type { PackProgress, ProjectMeta } from '@shared/types';
 import { localizedError, t, getAppLocale } from '../i18n';
+import { logError } from '../utils/log';
 
 function localizedProgress(key: string, params?: Record<string, string | number>): string {
   return t(getAppLocale(), key, params);
@@ -200,6 +201,7 @@ export async function exportProject(): Promise<string | null> {
 }
 
 export async function importProject(): Promise<ProjectMeta | null> {
+  assertOnboardingComplete();
   const fileResult = await dialog.showOpenDialog({
     title: t(getAppLocale(), 'dialog.importProject'),
     filters: fgtreeDialogFilter(),
@@ -223,7 +225,7 @@ export async function importProject(): Promise<ProjectMeta | null> {
 export async function backupProject(): Promise<string | null> {
   const project = requireProject();
   const settings = getSettings();
-  const backupFolder = settings.backupFolder ?? join(project.path, 'Backups');
+  const backupFolder = settings.backupFolder?.trim() || join(app.getPath('userData'), 'Backups');
   mkdirSync(backupFolder, { recursive: true });
   const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 16);
   const safeName = project.name.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -234,6 +236,7 @@ export async function backupProject(): Promise<string | null> {
 }
 
 export async function restoreProject(): Promise<ProjectMeta | null> {
+  assertOnboardingComplete();
   const fileResult = await dialog.showOpenDialog({
     title: t(getAppLocale(), 'dialog.restoreArchive'),
     filters: fgtreeDialogFilter(),
@@ -261,13 +264,26 @@ export async function backupOnQuitIfEnabled(): Promise<void> {
   }
   try {
     requireProject();
-    await backupProject();
   } catch {
-    // no open project
+    return;
+  }
+  try {
+    await backupProject();
+  } catch (err) {
+    logError('backupOnQuit', err);
   }
 }
 
 export async function handleOpenFgtreeFile(filePath: string): Promise<ProjectMeta | null> {
+  try {
+    assertOnboardingComplete();
+  } catch (err) {
+    await dialog.showMessageBox({
+      type: 'error',
+      message: (err as Error).message
+    });
+    return null;
+  }
   const folderResult = await dialog.showOpenDialog({
     title: t(getAppLocale(), 'dialog.deployFolder'),
     properties: ['openDirectory', 'createDirectory']
