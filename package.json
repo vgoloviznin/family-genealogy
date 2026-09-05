@@ -1,6 +1,6 @@
 {
   "name": "family-geneology",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Genealogy family tree desktop app",
   "main": "./out/main/index.js",
   "author": "",
@@ -104,7 +104,9 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["arm64"]
+          "arch": [
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.productivity"
@@ -114,7 +116,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
