@@ -231,6 +231,15 @@ const MIGRATIONS: Migration[] = [
     apply: () => {
       // Historical schema version marker; no DDL.
     }
+  },
+  {
+    version: 4,
+    apply: (sqlite) => {
+      ensureColumn(sqlite, 'people', 'first_name_en', `TEXT NOT NULL DEFAULT ''`);
+      ensureColumn(sqlite, 'people', 'last_name_en', `TEXT NOT NULL DEFAULT ''`);
+      ensureColumn(sqlite, 'people', 'middle_name_en', 'TEXT');
+      ensureColumn(sqlite, 'people', 'maiden_name_en', 'TEXT');
+    }
   }
 ];
 

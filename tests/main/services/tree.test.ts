@@ -57,4 +57,18 @@ describe.skipIf(!isSqliteAvailable())('tree service', () => {
       project.cleanup();
     }
   });
+
+  it('picks a default focus when opened without a selected person', async () => {
+    const project = createTestProjectDir();
+    try {
+      const parent = await createPerson({ firstName: 'Parent', lastName: 'Root' });
+      await addChildToPerson(parent.id, { firstName: 'Child', lastName: 'Root' });
+
+      const tree = await getTree();
+      expect(tree.focusPersonId).toBe(parent.id);
+      expect(tree.nodes.length).toBe(2);
+    } finally {
+      project.cleanup();
+    }
+  });
 });

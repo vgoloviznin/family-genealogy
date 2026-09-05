@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Person, PersonDetail, UpdatePersonInput } from '@shared/types';
 import { parseCoordinates } from '@shared/coordinates';
+import { hasRequiredNamePart } from '@shared/person-name';
 import { PersonAvatar } from './PersonAvatar';
-import { personLabel, formatLifeSpan } from '../lib/labels';
+import { personLabel, personLabelEn, formatLifeSpan } from '../lib/labels';
 import { buildFormFromPerson, isPersonFormDirty, type PersonFormState } from './person-detail/helpers';
 import { DangerBtn } from './person-detail/ui';
 import { PersonInfoTab } from './person-detail/PersonInfoTab';
@@ -74,10 +75,12 @@ export function PersonDetailPanel({
         if (!isPersonFormDirty(current, lastSavedFormRef.current)) {
           return true;
         }
-        if (!current.firstName.trim() && !current.lastName.trim()) {
-          if (mode === 'manual') {
-            setSaveError(t('personDetail.nameRequired'));
-          }
+        if (!hasRequiredNamePart(current.firstName, current.lastName)) {
+          setSaveError(t('personDetail.nameRequired'));
+          return false;
+        }
+        if (!hasRequiredNamePart(current.firstNameEn, current.lastNameEn)) {
+          setSaveError(t('personDetail.nameEnRequired'));
           return false;
         }
         const burialCoords = current.isLiving ? null : parseCoordinates(current.burialCoords);
@@ -93,6 +96,10 @@ export function PersonDetailPanel({
           lastName: current.lastName,
           middleName: current.middleName,
           maidenName: current.maidenName,
+          firstNameEn: current.firstNameEn,
+          lastNameEn: current.lastNameEn,
+          middleNameEn: current.middleNameEn,
+          maidenNameEn: current.maidenNameEn,
           sex: current.sex,
           isLiving: current.isLiving,
           notes: current.notes,
@@ -181,6 +188,7 @@ export function PersonDetailPanel({
           <PersonAvatar personId={person.id} thumbUrl={person.thumbUrl} onUpdated={onRefresh} />
           <div className="flex-1 min-w-0">
             <h2 className="text-xl font-serif">{personLabel(person)}</h2>
+            {personLabelEn(person) ? <p className="text-sm text-stone-500 mt-0.5">{personLabelEn(person)}</p> : null}
             <p className="text-sm text-stone-500 mt-1">{formatLifeSpan(person)}</p>
           </div>
           {person.isLiving && (

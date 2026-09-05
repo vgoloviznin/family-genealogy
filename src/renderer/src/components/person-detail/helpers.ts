@@ -9,6 +9,10 @@ export function buildFormFromPerson(person: PersonDetail) {
     lastName: person.lastName,
     middleName: person.middleName ?? '',
     maidenName: person.maidenName ?? '',
+    firstNameEn: person.firstNameEn ?? '',
+    lastNameEn: person.lastNameEn ?? '',
+    middleNameEn: person.middleNameEn ?? '',
+    maidenNameEn: person.maidenNameEn ?? '',
     sex: person.sex,
     isLiving: person.isLiving,
     notes: person.notes ?? '',
@@ -49,6 +53,10 @@ export function isPersonFormDirty(a: PersonFormState, b: PersonFormState): boole
     a.lastName !== b.lastName ||
     a.middleName !== b.middleName ||
     a.maidenName !== b.maidenName ||
+    a.firstNameEn !== b.firstNameEn ||
+    a.lastNameEn !== b.lastNameEn ||
+    a.middleNameEn !== b.middleNameEn ||
+    a.maidenNameEn !== b.maidenNameEn ||
     a.sex !== b.sex ||
     a.isLiving !== b.isLiving ||
     a.notes !== b.notes ||
@@ -68,6 +76,10 @@ export function formSnapshotKey(form: PersonFormState): string {
     form.lastName,
     form.middleName,
     form.maidenName,
+    form.firstNameEn,
+    form.lastNameEn,
+    form.middleNameEn,
+    form.maidenNameEn,
     form.sex,
     form.isLiving ? '1' : '0',
     form.notes,
