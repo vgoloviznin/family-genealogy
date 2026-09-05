@@ -22,12 +22,12 @@ jobs:
           node-version-file: '.nvmrc'
           cache: npm
 
-      # postinstall builds native addons for Electron; rebuild for system Node so vitest can load better-sqlite3
+      # postinstall builds native addons for Electron; rebuild for system Node so vitest can load them
       - name: Install dependencies
         run: npm ci
 
-      - name: Rebuild better-sqlite3 for Node
-        run: npm rebuild better-sqlite3
+      - name: Rebuild native modules for Node
+        run: npm rebuild better-sqlite3 sharp
 
       - name: Lint
         run: npm run lint
