@@ -1,6 +1,6 @@
 {
   "name": "family-geneology",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Genealogy family tree desktop app",
   "main": "./out/main/index.js",
   "author": "",
