@@ -181,9 +181,9 @@ export function useProjectSession(showToast: (message: string, variant?: 'info' 
 
   useEffect(() => {
     if (view === 'tree') {
-      void refreshTree(selectedId);
+      void refreshTree();
     }
-  }, [view, selectedId, familyTreeKey, people.length, refreshTree]);
+  }, [view, familyTreeKey, people.length, refreshTree]);
 
   const handleCreate = useCallback(
     async (name: string) => {

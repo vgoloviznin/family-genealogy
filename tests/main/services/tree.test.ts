@@ -89,4 +89,25 @@ describe.skipIf(!isSqliteAvailable())('tree service', () => {
       project.cleanup();
     }
   });
+
+  it('keeps generation layout stable regardless of the requested viewport person', async () => {
+    const project = createTestProjectDir();
+    try {
+      const parent = await createPerson({ firstName: 'Parent', lastName: 'Stable' });
+      const child = await addChildToPerson(parent.id, { firstName: 'Child', lastName: 'Stable' });
+
+      const fromParent = await getTree(parent.id);
+      const fromChild = await getTree(child.id);
+
+      expect(fromParent.focusPersonId).toBe(parent.id);
+      expect(fromChild.focusPersonId).toBe(child.id);
+
+      const gen = (tree: Awaited<ReturnType<typeof getTree>>, id: string) => tree.nodes.find((n) => n.id === id)?.generation;
+      expect(gen(fromParent, parent.id)).toBe(gen(fromChild, parent.id));
+      expect(gen(fromParent, child.id)).toBe(gen(fromChild, child.id));
+      expect(gen(fromParent, parent.id)).toBeLessThan(gen(fromParent, child.id)!);
+    } finally {
+      project.cleanup();
+    }
+  });
 });
