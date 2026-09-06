@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestProjectDir } from '../../helpers/project-fixture';
 import { isSqliteAvailable } from '../../helpers/sqlite-available';
 import { closeProject } from '@main/services/project';
-import { createPerson } from '@main/services/people';
+import { createPerson, deletePerson } from '@main/services/people';
 import { addChildToPerson, addPartner } from '@main/services/family';
 import { getTree } from '@main/services/tree';
 
@@ -67,6 +67,45 @@ describe.skipIf(!isSqliteAvailable())('tree service', () => {
       const tree = await getTree();
       expect(tree.focusPersonId).toBe(parent.id);
       expect(tree.nodes.length).toBe(2);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('omits soft-deleted people from family children used for tree hints', async () => {
+    const project = createTestProjectDir();
+    try {
+      const parent = await createPerson({ firstName: 'Yuri', lastName: 'Sadomtsev' });
+      await addPartner(parent.id, { firstName: 'Lyubov', lastName: 'Sadomtseva' });
+      const kept = await addChildToPerson(parent.id, { firstName: 'Sergey', lastName: 'Sadomtsev' });
+      const ghost = await addChildToPerson(parent.id, { firstName: '', lastName: '' });
+      await deletePerson(ghost.id);
+
+      const tree = await getTree(parent.id);
+      const family = tree.families.find((f) => f.partners.includes(parent.id));
+      expect(family?.children).toEqual([kept.id]);
+      expect(tree.nodes.map((n) => n.id)).not.toContain(ghost.id);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('keeps generation layout stable regardless of the requested viewport person', async () => {
+    const project = createTestProjectDir();
+    try {
+      const parent = await createPerson({ firstName: 'Parent', lastName: 'Stable' });
+      const child = await addChildToPerson(parent.id, { firstName: 'Child', lastName: 'Stable' });
+
+      const fromParent = await getTree(parent.id);
+      const fromChild = await getTree(child.id);
+
+      expect(fromParent.focusPersonId).toBe(parent.id);
+      expect(fromChild.focusPersonId).toBe(child.id);
+
+      const gen = (tree: Awaited<ReturnType<typeof getTree>>, id: string) => tree.nodes.find((n) => n.id === id)?.generation;
+      expect(gen(fromParent, parent.id)).toBe(gen(fromChild, parent.id));
+      expect(gen(fromParent, child.id)).toBe(gen(fromChild, child.id));
+      expect(gen(fromParent, parent.id)).toBeLessThan(gen(fromParent, child.id)!);
     } finally {
       project.cleanup();
     }

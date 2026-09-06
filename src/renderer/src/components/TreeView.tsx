@@ -19,6 +19,7 @@ import {
   buildFamilyConnectors,
   familyConnectorSegments,
   standalonePartnerPairs,
+  parentlessSiblingSegments,
   partnerLineCoords,
   buildPedigreeNodeWidths,
   compactNameLines,
@@ -26,7 +27,7 @@ import {
   PEDIGREE_CARD_H,
   type TreeLineSegment
 } from '@shared/tree-layout';
-import { defaultTreeFocusId } from '@shared/tree-graph';
+import { defaultTreeFocusId, assignGenerationsFromFocus } from '@shared/tree-graph';
 import { personLabel, personLabelEn, personInitials, formatLifeSpan } from '../lib/labels';
 
 interface Props {
@@ -165,29 +166,59 @@ function extractPartnerPairs(data: TreeData): Array<[string, string]> {
   return pairs;
 }
 
-function childCount(personId: string, families: TreeFamily[]): number {
+function extractParentPairs(data: TreeData): Array<[string, string]> {
+  const pairs: Array<[string, string]> = [];
+  for (const e of data.edges) {
+    if (e.kind === 'parent') {
+      pairs.push([e.source, e.target]);
+    }
+  }
+  return pairs;
+}
+
+function relationTypeForHint(personId: string, hintFocusId: string | null, generations: Map<string, number>): TreeNode['type'] {
+  if (!hintFocusId || personId === hintFocusId) {
+    return 'focus';
+  }
+  const generation = generations.get(personId) ?? 0;
+  if (generation < 0) {
+    return 'ancestor';
+  }
+  if (generation > 0) {
+    return 'descendant';
+  }
+  return 'focus';
+}
+
+function childCount(personId: string, families: TreeFamily[], knownPeople: Set<string>): number {
   let count = 0;
   for (const family of families) {
     if (family.partners.includes(personId)) {
-      count += family.children.length;
+      for (const childId of family.children) {
+        if (knownPeople.has(childId)) {
+          count += 1;
+        }
+      }
     }
   }
   return count;
 }
 
-function relationHint(t: TFunction, node: TreeNode, focusId: string | null, data: TreeData): string | null {
-  const children = childCount(node.id, data.families);
+function relationHint(t: TFunction, node: TreeNode, hintFocusId: string | null, data: TreeData, generations: Map<string, number>): string | null {
+  const knownPeople = new Set(data.nodes.map((n) => n.id));
+  const children = childCount(node.id, data.families, knownPeople);
   const childPart = children > 0 ? t('treeHint.childCount', { count: children }) : null;
+  const type = relationTypeForHint(node.id, hintFocusId, generations);
 
-  if (!focusId) {
+  if (!hintFocusId) {
     return childPart;
   }
-  if (node.id === focusId) {
+  if (node.id === hintFocusId) {
     return childPart;
   }
 
-  if (node.type === 'ancestor') {
-    const isParent = data.edges.some((e) => e.kind === 'parent' && e.source === node.id && e.target === focusId);
+  if (type === 'ancestor') {
+    const isParent = data.edges.some((e) => e.kind === 'parent' && e.source === node.id && e.target === hintFocusId);
     if (isParent) {
       if (node.person.sex === 'female') {
         return childPart ? `${t('treeHint.mother')} · ${childPart}` : t('treeHint.mother');
@@ -200,8 +231,8 @@ function relationHint(t: TFunction, node: TreeNode, focusId: string | null, data
     return childPart ? `${t('treeHint.ancestor')} · ${childPart}` : t('treeHint.ancestor');
   }
 
-  if (node.type === 'descendant') {
-    const isChild = data.edges.some((e) => e.kind === 'parent' && e.source === focusId && e.target === node.id);
+  if (type === 'descendant') {
+    const isChild = data.edges.some((e) => e.kind === 'parent' && e.source === hintFocusId && e.target === node.id);
     if (isChild) {
       return childPart ? `${t('treeHint.child')} · ${childPart}` : t('treeHint.child');
     }
@@ -209,7 +240,7 @@ function relationHint(t: TFunction, node: TreeNode, focusId: string | null, data
   }
 
   const isPartner = data.edges.some(
-    (e) => e.kind === 'partner' && ((e.source === focusId && e.target === node.id) || (e.target === focusId && e.source === node.id))
+    (e) => e.kind === 'partner' && ((e.source === hintFocusId && e.target === node.id) || (e.target === hintFocusId && e.source === node.id))
   );
   if (isPartner) {
     return childPart ? `${t('treeHint.spouse')} · ${childPart}` : t('treeHint.spouse');
@@ -272,20 +303,19 @@ function TreeCanvas({ locale, data, selectedId, onSelectPerson, suppressDeselect
     onSelectRef.current(id);
   }, []);
 
-  const layout = useMemo(() => {
-    // getFixedT(locale) — явный язык карточек; useLocale ждёт changeLanguage до setState.
+  const geometry = useMemo(() => {
     const t = i18n.getFixedT(locale);
     const emptyNameLabel = t('enum.newPerson');
     const nodeIds = data.nodes.map((n) => n.id);
     const partnerPairs = extractPartnerPairs(data);
+    const parentPairs = extractParentPairs(data);
     const families = data.families ?? [];
     const nodeWidths = buildPedigreeNodeWidths(
       data.nodes.map((n) => ({ ...n.person, id: n.id })),
       emptyNameLabel
     );
 
-    const layoutFocus =
-      data.focusPersonId ??
+    const layoutRoot =
       defaultTreeFocusId(
         nodeIds,
         families.flatMap((family) => family.children)
@@ -295,14 +325,17 @@ function TreeCanvas({ locale, data, selectedId, onSelectPerson, suppressDeselect
 
     const positions = layoutPedigreeTree({
       nodeIds,
-      focusId: layoutFocus,
+      focusId: layoutRoot,
       families,
       partnerPairs,
       nodeWidths
     });
 
     const connectors = buildFamilyConnectors(families, positions, nodeWidths);
-    const lineSegments: TreeLineSegment[] = connectors.flatMap((connector) => familyConnectorSegments(connector, nodeWidths));
+    const lineSegments: TreeLineSegment[] = [
+      ...connectors.flatMap((connector) => familyConnectorSegments(connector, nodeWidths)),
+      ...parentlessSiblingSegments(families, positions, nodeWidths)
+    ];
 
     for (const [a, b] of standalonePartnerPairs(partnerPairs, families)) {
       const pa = positions.get(a);
@@ -321,9 +354,19 @@ function TreeCanvas({ locale, data, selectedId, onSelectPerson, suppressDeselect
       });
     }
 
+    return { positions, lineSegments, nodeWidths, emptyNameLabel, layoutRoot, nodeIds, partnerPairs, parentPairs };
+  }, [locale, data]);
+
+  const layout = useMemo(() => {
+    const t = i18n.getFixedT(locale);
+    const { positions, lineSegments, nodeWidths, emptyNameLabel, layoutRoot, nodeIds, partnerPairs, parentPairs } = geometry;
+    const hintFocus = selectedId && nodeIds.includes(selectedId) ? selectedId : (layoutRoot ?? null);
+    const hintGenerations = hintFocus != null ? assignGenerationsFromFocus(hintFocus, nodeIds, partnerPairs, parentPairs) : new Map<string, number>();
+
     const nodes: Node[] = data.nodes.map((n) => {
       const pos = positions.get(n.id) ?? { x: 0, y: 0 };
       const cardWidth = nodeWidths.get(n.id)!;
+      const isSelected = n.id === selectedId;
       return {
         id: n.id,
         type: 'person',
@@ -331,21 +374,21 @@ function TreeCanvas({ locale, data, selectedId, onSelectPerson, suppressDeselect
         data: {
           person: n.person,
           cardWidth,
-          isFocus: layoutFocus != null && n.id === layoutFocus,
-          isSelected: n.id === selectedId,
-          hint: relationHint(t, n, layoutFocus ?? null, data),
+          isFocus: hintFocus != null && n.id === hintFocus,
+          isSelected,
+          hint: relationHint(t, n, hintFocus, data, hintGenerations),
           lifeSpan: formatLifeSpan(n.person, t),
           emptyNameLabel,
           locale,
           onSelect: stableSelect
         } satisfies PersonNodeData,
         draggable: false,
-        style: { width: cardWidth, zIndex: n.id === selectedId ? 30 : layoutFocus === n.id ? 10 : 2 }
+        style: { width: cardWidth, zIndex: isSelected ? 30 : hintFocus === n.id ? 10 : 2 }
       };
     });
 
-    return { nodes, lineSegments, viewportFocusId: layoutFocus ?? null };
-  }, [locale, data, selectedId, stableSelect]);
+    return { nodes, lineSegments, viewportFocusId: hintFocus };
+  }, [locale, data, geometry, selectedId, stableSelect]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState(layout.nodes);
   const [edges, , onEdgesChange] = useEdgesState([]);

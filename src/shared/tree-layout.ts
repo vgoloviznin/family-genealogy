@@ -136,19 +136,23 @@ export function assignLayoutGenerations(
   nodeIds: string[],
   parentPairs: Array<[string, string]>,
   partnerPairs: Array<[string, string]>,
-  focusId?: string
+  focusId?: string,
+  families: TreeFamily[] = []
 ): Map<string, number> {
-  const anchor = focusId && nodeIds.includes(focusId) ? focusId : nodeIds[0];
+  const known = new Set(nodeIds);
+  const anchor = focusId && known.has(focusId) ? focusId : nodeIds[0];
   const gen = assignGenerationsFromFocus(anchor, nodeIds, partnerPairs, parentPairs);
 
-  let changed = true;
-  while (changed) {
-    changed = false;
+  // MAX: супруг с родителями «тянет» пару вниз по рядам. MIN осциллирует
+  // (ребёнок parent+1 → партнёр снова к меньшему gen → снова push).
+  const maxIters = Math.max(32, nodeIds.length * 4);
+  for (let iter = 0; iter < maxIters; iter++) {
+    let changed = false;
     for (const [a, b] of partnerPairs) {
-      if (!gen.has(a) || !gen.has(b)) {
+      if (!known.has(a) || !known.has(b) || !gen.has(a) || !gen.has(b)) {
         continue;
       }
-      const g = Math.min(gen.get(a)!, gen.get(b)!);
+      const g = Math.max(gen.get(a)!, gen.get(b)!);
       if (gen.get(a) !== g) {
         gen.set(a, g);
         changed = true;
@@ -158,8 +162,21 @@ export function assignLayoutGenerations(
         changed = true;
       }
     }
+    for (const family of families) {
+      const kids = family.children.filter((id) => known.has(id) && gen.has(id));
+      if (kids.length < 2) {
+        continue;
+      }
+      const g = Math.max(...kids.map((id) => gen.get(id)!));
+      for (const id of kids) {
+        if (gen.get(id) !== g) {
+          gen.set(id, g);
+          changed = true;
+        }
+      }
+    }
     for (const [parent, child] of parentPairs) {
-      if (!gen.has(parent)) {
+      if (!known.has(parent) || !known.has(child) || !gen.has(parent)) {
         continue;
       }
       const want = gen.get(parent)! + 1;
@@ -167,6 +184,9 @@ export function assignLayoutGenerations(
         gen.set(child, want);
         changed = true;
       }
+    }
+    if (!changed) {
+      break;
     }
   }
 
@@ -177,9 +197,27 @@ function partnerFamilies(personId: string, families: TreeFamily[]): TreeFamily[]
   return families.filter((f) => f.partners.includes(personId) && f.children.length > 0);
 }
 
+function siblingGroupFamilies(personId: string, families: TreeFamily[]): TreeFamily[] {
+  return families.filter((f) => f.children.includes(personId) && f.children.length > 1);
+}
+
 function rootFamilies(families: TreeFamily[]): TreeFamily[] {
   const children = new Set(families.flatMap((f) => f.children));
-  return families.filter((f) => f.partners.some((p) => !children.has(p)));
+  return families.filter((f) => {
+    // Parentless sibling groups (or partners all filtered out) — still layout roots.
+    if (f.partners.length === 0) {
+      return f.children.length > 0;
+    }
+    return f.partners.some((p) => !children.has(p));
+  });
+}
+
+function familyRootGeneration(family: TreeFamily, generations: Map<string, number>): number {
+  const ids = family.partners.length > 0 ? family.partners : family.children;
+  if (ids.length === 0) {
+    return 0;
+  }
+  return Math.min(...ids.map((id) => generations.get(id) ?? 0));
 }
 
 function measureChildSlot(
@@ -439,6 +477,20 @@ function placeChild(
       placeFamily(family, centerX, generations, partnerPairs, families, positions, placed, widths, nodeWidths);
     }
   }
+
+  // Co-children of parentless (or shared) families — e.g. brothers linked without parents.
+  for (const member of members) {
+    for (const family of siblingGroupFamilies(member, families)) {
+      if (seen.has(family.id)) {
+        continue;
+      }
+      if (!family.children.some((c) => !placed.has(c))) {
+        continue;
+      }
+      seen.add(family.id);
+      attachFamilyToPlacedChildren(family, generations, partnerPairs, families, positions, placed, widths, nodeWidths);
+    }
+  }
 }
 
 function placeFamily(
@@ -454,6 +506,24 @@ function placeFamily(
 ) {
   if (family.children.some((c) => placed.has(c))) {
     attachFamilyToPlacedChildren(family, generations, partnerPairs, families, positions, placed, widths, nodeWidths);
+    return;
+  }
+
+  if (family.partners.length === 0) {
+    if (family.children.length === 0) {
+      return;
+    }
+    const childWidths = family.children.map(
+      (childId) => widths.get(`child:${childId}`) ?? measureChildSlot(childId, generations, partnerPairs, families, widths, nodeWidths, new Set())
+    );
+    const totalWidth = childWidths.reduce((sum, w, i) => sum + w + (i > 0 ? PEDIGREE_SIBLING_GAP : 0), 0);
+    let cursor = centerX - totalWidth / 2;
+    for (let i = 0; i < family.children.length; i++) {
+      const childId = family.children[i];
+      const slotW = childWidths[i];
+      placeChild(childId, cursor + slotW / 2, generations, partnerPairs, families, positions, placed, widths, nodeWidths);
+      cursor += slotW + PEDIGREE_SIBLING_GAP;
+    }
     return;
   }
 
@@ -487,16 +557,21 @@ function placeFamily(
 
 export function layoutPedigreeTree(input: PedigreeLayoutInput): Map<string, { x: number; y: number }> {
   const parentPairs = parentPairsFromFamilies(input.families);
-  const generations = assignLayoutGenerations(input.nodeIds, parentPairs, input.partnerPairs, input.focusId);
+  const generations = assignLayoutGenerations(input.nodeIds, parentPairs, input.partnerPairs, input.focusId, input.families);
   const nodeWidths = input.nodeWidths ?? new Map<string, number>();
   const widths = new Map<string, number>();
   const positions = new Map<string, { x: number; y: number }>();
   const placed = new Set<string>();
 
   const roots = rootFamilies(input.families);
+  // Partner-based roots first so a placed spouse can pull in parentless co-siblings.
   const sortedRoots = [...roots].sort((a, b) => {
-    const ga = Math.min(...a.partners.map((p) => generations.get(p) ?? 0));
-    const gb = Math.min(...b.partners.map((p) => generations.get(p) ?? 0));
+    const parentless = (a.partners.length === 0 ? 1 : 0) - (b.partners.length === 0 ? 1 : 0);
+    if (parentless !== 0) {
+      return parentless;
+    }
+    const ga = familyRootGeneration(a, generations);
+    const gb = familyRootGeneration(b, generations);
     return ga - gb || a.id.localeCompare(b.id);
   });
 
@@ -734,6 +809,42 @@ export function standalonePartnerPairs(partnerPairs: Array<[string, string]>, fa
   }
 
   return partnerPairs.filter(([a, b]) => !skip.has([a, b].sort().join('|')));
+}
+
+/** Sibling bar for families with children but no parents on the canvas */
+export function parentlessSiblingSegments(
+  families: TreeFamily[],
+  positions: Map<string, { x: number; y: number }>,
+  nodeWidths: Map<string, number> = new Map()
+): TreeLineSegment[] {
+  const segments: TreeLineSegment[] = [];
+  for (const family of families) {
+    if (family.partners.length > 0 || family.children.length < 2) {
+      continue;
+    }
+    const children = pointsFor(family.children, positions);
+    if (children.length < 2) {
+      continue;
+    }
+    const sorted = [...children].sort((a, b) => a.x - b.x);
+    for (let i = 1; i < sorted.length; i++) {
+      const left = sorted[i - 1];
+      const right = sorted[i];
+      if (Math.abs(left.y - right.y) > 1) {
+        continue;
+      }
+      const line = siblingLineCoords(left, right, nodeWidth(left.id, nodeWidths), nodeWidth(right.id, nodeWidths));
+      if (line.x2 - line.x1 < 1) {
+        continue;
+      }
+      segments.push({
+        id: `${family.id}-sibling-${left.id}|${right.id}`,
+        kind: 'sibling',
+        ...line
+      });
+    }
+  }
+  return segments;
 }
 
 function innerEdgeLine(

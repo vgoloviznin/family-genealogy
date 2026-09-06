@@ -60,22 +60,37 @@ export async function getTree(personId?: string | null): Promise<TreeData> {
     }
   }
 
-  const graph = buildProjectGraph(partnersByFamily, childrenByFamily);
   const allPersonIds = peopleRows.map((p) => p.id);
+  const activePeople = new Set(allPersonIds);
+
+  // Drop soft-deleted people still referenced by live family_* rows (detail UI already skips them).
+  for (const [familyId, partners] of partnersByFamily) {
+    partnersByFamily.set(
+      familyId,
+      partners.filter((id) => activePeople.has(id))
+    );
+  }
+  for (const [familyId, children] of childrenByFamily) {
+    childrenByFamily.set(
+      familyId,
+      children.filter((id) => activePeople.has(id))
+    );
+  }
+
+  const graph = buildProjectGraph(partnersByFamily, childrenByFamily);
   const treeFamilies: TreeFamily[] = families.map((family) => ({
     id: family.id,
     partners: partnersByFamily.get(family.id) ?? [],
     children: childrenByFamily.get(family.id) ?? []
   }));
-  const userFocus = personId && allPersonIds.includes(personId) ? personId : null;
-  const layoutFocus =
-    userFocus ??
+  // Layout root is stable (not the selected person) so the drawn tree does not jump on selection.
+  const layoutRoot =
     defaultTreeFocusId(
       allPersonIds,
       treeFamilies.flatMap((family) => family.children)
-    ) ??
-    allPersonIds[0]!;
-  const generations = assignGenerationsFromFocus(layoutFocus, allPersonIds, graph.partnerPairs, graph.parentPairs);
+    ) ?? allPersonIds[0]!;
+  const generations = assignGenerationsFromFocus(layoutRoot, allPersonIds, graph.partnerPairs, graph.parentPairs);
+  const viewportFocus = personId && allPersonIds.includes(personId) ? personId : layoutRoot;
 
   const life = await loadLifeYears(allPersonIds);
   const peopleById = new Map(peopleRows.map((row) => [row.id, mapPerson(row, life.get(row.id))]));
@@ -85,7 +100,7 @@ export async function getTree(personId?: string | null): Promise<TreeData> {
     return {
       id,
       person: peopleById.get(id)!,
-      type: nodeType(layoutFocus, id, generation),
+      type: nodeType(layoutRoot, id, generation),
       generation
     };
   });
@@ -111,7 +126,7 @@ export async function getTree(personId?: string | null): Promise<TreeData> {
     nodes,
     edges,
     families: treeFamilies,
-    // Always a concrete person so the viewport can center without a UI selection.
-    focusPersonId: layoutFocus
+    // Preferred viewport target; layout geometry always uses the stable root above.
+    focusPersonId: viewportFocus
   };
 }
