@@ -19,6 +19,7 @@ import {
   buildFamilyConnectors,
   familyConnectorSegments,
   standalonePartnerPairs,
+  parentlessSiblingSegments,
   partnerLineCoords,
   buildPedigreeNodeWidths,
   compactNameLines,
@@ -307,7 +308,10 @@ function TreeCanvas({ locale, data, selectedId, onSelectPerson, suppressDeselect
     });
 
     const connectors = buildFamilyConnectors(families, positions, nodeWidths);
-    const lineSegments: TreeLineSegment[] = connectors.flatMap((connector) => familyConnectorSegments(connector, nodeWidths));
+    const lineSegments: TreeLineSegment[] = [
+      ...connectors.flatMap((connector) => familyConnectorSegments(connector, nodeWidths)),
+      ...parentlessSiblingSegments(families, positions, nodeWidths)
+    ];
 
     for (const [a, b] of standalonePartnerPairs(partnerPairs, families)) {
       const pa = positions.get(a);

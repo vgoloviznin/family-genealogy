@@ -7,6 +7,7 @@ import {
   familyConnectorPath,
   familyConnectorSegments,
   layoutPedigreeTree,
+  parentlessSiblingSegments,
   partnerLineCoords,
   standalonePartnerPairs,
   TREE_LINE_STYLES,
@@ -91,12 +92,7 @@ describe('assignLayoutGenerations', () => {
   it('aligns partners to the deeper generation when one spouse has parents', () => {
     // Unrelated focus leaves the branch at gen 0 (same as a disconnected component).
     // Old MIN equalization oscillated forever (son pushed to 1, then pulled back to spouse's 0).
-    const gens = assignLayoutGenerations(
-      ['outsider', 'father', 'son', 'spouse'],
-      [['father', 'son']],
-      [['son', 'spouse']],
-      'outsider'
-    );
+    const gens = assignLayoutGenerations(['outsider', 'father', 'son', 'spouse'], [['father', 'son']], [['son', 'spouse']], 'outsider');
 
     expect(gens.get('father')).toBe(0);
     expect(gens.get('son')).toBe(1);
@@ -135,6 +131,31 @@ describe('layoutPedigreeTree hang regression', () => {
     expect(positions.get('vasily-v')!.y).toBe(positions.get('maria')!.y);
     expect(positions.get('lyubov')!.y).toBe(positions.get('yuri')!.y);
     expect(positions.get('lyubov')!.y).toBeGreaterThan(positions.get('vasily-v')!.y);
+    // Parentless sibling link: Vladimir stays on Yuri's row, not a distant leftover column.
+    expect(positions.get('vladimir')!.y).toBe(positions.get('yuri')!.y);
+    expect(Math.abs(positions.get('vladimir')!.x - positions.get('yuri')!.x)).toBeLessThan(400);
+  });
+});
+
+describe('parentless siblings', () => {
+  it('places co-children without parents beside each other and draws a sibling line', () => {
+    const families: TreeFamily[] = [
+      { id: 'f-couple', partners: ['lyubov', 'yuri'], children: [] },
+      { id: 'f-bros', partners: [], children: ['yuri', 'vladimir'] },
+      { id: 'f-v', partners: ['vladimir'], children: ['maria'] }
+    ];
+    const positions = layoutPedigreeTree({
+      nodeIds: ['lyubov', 'yuri', 'vladimir', 'maria'],
+      focusId: 'lyubov',
+      families,
+      partnerPairs: [['lyubov', 'yuri']]
+    });
+
+    expect(positions.get('vladimir')!.y).toBe(positions.get('yuri')!.y);
+    expect(positions.get('maria')!.y).toBeGreaterThan(positions.get('vladimir')!.y);
+
+    const segments = parentlessSiblingSegments(families, positions);
+    expect(segments.some((s) => s.kind === 'sibling')).toBe(true);
   });
 });
 
