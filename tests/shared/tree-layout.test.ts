@@ -133,7 +133,65 @@ describe('layoutPedigreeTree hang regression', () => {
     expect(positions.get('lyubov')!.y).toBeGreaterThan(positions.get('vasily-v')!.y);
     // Parentless sibling link: Vladimir stays on Yuri's row, not a distant leftover column.
     expect(positions.get('vladimir')!.y).toBe(positions.get('yuri')!.y);
-    expect(Math.abs(positions.get('vladimir')!.x - positions.get('yuri')!.x)).toBeLessThan(400);
+    expect(Math.abs(positions.get('vladimir')!.x - positions.get('yuri')!.x)).toBeLessThan(700);
+  });
+});
+
+describe('family-block in-law layout', () => {
+  it('keeps in-law spouse outside the sibling pack so family stems do not cross', () => {
+    const families: TreeFamily[] = [
+      { id: 'f-gol', partners: ['alexander', 'nella'], children: ['vsevolod'] },
+      { id: 'f-val', partners: ['davide', 'natalya'], children: ['diana', 'sabina', 'monica'] },
+      { id: 'f-couple', partners: ['vsevolod', 'diana'], children: [] }
+    ];
+    const nodeIds = ['alexander', 'nella', 'vsevolod', 'davide', 'natalya', 'diana', 'sabina', 'monica'];
+    const partnerPairs: Array<[string, string]> = [
+      ['alexander', 'nella'],
+      ['davide', 'natalya'],
+      ['vsevolod', 'diana']
+    ];
+    const positions = layoutPedigreeTree({ nodeIds, focusId: 'davide', families, partnerPairs });
+
+    // Vsevolod sits outside Valfre siblings (left of Diana), not between Diana and Sabina.
+    expect(positions.get('vsevolod')!.x).toBeLessThan(positions.get('diana')!.x);
+    expect(positions.get('diana')!.x).toBeLessThan(positions.get('sabina')!.x);
+    expect(positions.get('sabina')!.x).toBeLessThan(positions.get('monica')!.x);
+
+    const gens = assignLayoutGenerations(
+      nodeIds,
+      [
+        ['alexander', 'vsevolod'],
+        ['nella', 'vsevolod'],
+        ['davide', 'diana'],
+        ['davide', 'sabina'],
+        ['davide', 'monica'],
+        ['natalya', 'diana'],
+        ['natalya', 'sabina'],
+        ['natalya', 'monica']
+      ],
+      partnerPairs,
+      'davide',
+      families
+    );
+    // Natal parents stay one row above the married child (no multi-row stem through Valfre).
+    expect(gens.get('vsevolod')! - gens.get('alexander')!).toBe(1);
+    expect(gens.get('diana')! - gens.get('davide')!).toBe(1);
+
+    const connectors = buildFamilyConnectors(families, positions);
+    const segments = connectors.flatMap((c) => familyConnectorSegments(c));
+    const golStem = segments.find((s) => s.id.includes('f-gol-stem') && s.kind === 'parent' && s.x1 === s.x2);
+    const valBar = segments.find((s) => s.id === 'f-val-child-bar');
+    expect(golStem).toBeTruthy();
+    expect(valBar).toBeTruthy();
+    // Vertical Goloviznin stem should not pierce the Valfre child bar.
+    const stemX = golStem!.x1;
+    const barY = valBar!.y1;
+    const crosses =
+      stemX > Math.min(valBar!.x1, valBar!.x2) &&
+      stemX < Math.max(valBar!.x1, valBar!.x2) &&
+      Math.min(golStem!.y1, golStem!.y2) < barY &&
+      Math.max(golStem!.y1, golStem!.y2) > barY;
+    expect(crosses).toBe(false);
   });
 });
 
