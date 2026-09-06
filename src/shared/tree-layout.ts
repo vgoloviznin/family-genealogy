@@ -138,17 +138,20 @@ export function assignLayoutGenerations(
   partnerPairs: Array<[string, string]>,
   focusId?: string
 ): Map<string, number> {
-  const anchor = focusId && nodeIds.includes(focusId) ? focusId : nodeIds[0];
+  const known = new Set(nodeIds);
+  const anchor = focusId && known.has(focusId) ? focusId : nodeIds[0];
   const gen = assignGenerationsFromFocus(anchor, nodeIds, partnerPairs, parentPairs);
 
-  let changed = true;
-  while (changed) {
-    changed = false;
+  // MAX: супруг с родителями «тянет» пару вниз по рядам. MIN осциллирует
+  // (ребёнок parent+1 → партнёр снова к меньшему gen → снова push).
+  const maxIters = Math.max(32, nodeIds.length * 4);
+  for (let iter = 0; iter < maxIters; iter++) {
+    let changed = false;
     for (const [a, b] of partnerPairs) {
-      if (!gen.has(a) || !gen.has(b)) {
+      if (!known.has(a) || !known.has(b) || !gen.has(a) || !gen.has(b)) {
         continue;
       }
-      const g = Math.min(gen.get(a)!, gen.get(b)!);
+      const g = Math.max(gen.get(a)!, gen.get(b)!);
       if (gen.get(a) !== g) {
         gen.set(a, g);
         changed = true;
@@ -159,7 +162,7 @@ export function assignLayoutGenerations(
       }
     }
     for (const [parent, child] of parentPairs) {
-      if (!gen.has(parent)) {
+      if (!known.has(parent) || !known.has(child) || !gen.has(parent)) {
         continue;
       }
       const want = gen.get(parent)! + 1;
@@ -167,6 +170,9 @@ export function assignLayoutGenerations(
         gen.set(child, want);
         changed = true;
       }
+    }
+    if (!changed) {
+      break;
     }
   }
 

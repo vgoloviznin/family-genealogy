@@ -165,18 +165,23 @@ function extractPartnerPairs(data: TreeData): Array<[string, string]> {
   return pairs;
 }
 
-function childCount(personId: string, families: TreeFamily[]): number {
+function childCount(personId: string, families: TreeFamily[], knownPeople: Set<string>): number {
   let count = 0;
   for (const family of families) {
     if (family.partners.includes(personId)) {
-      count += family.children.length;
+      for (const childId of family.children) {
+        if (knownPeople.has(childId)) {
+          count += 1;
+        }
+      }
     }
   }
   return count;
 }
 
 function relationHint(t: TFunction, node: TreeNode, focusId: string | null, data: TreeData): string | null {
-  const children = childCount(node.id, data.families);
+  const knownPeople = new Set(data.nodes.map((n) => n.id));
+  const children = childCount(node.id, data.families, knownPeople);
   const childPart = children > 0 ? t('treeHint.childCount', { count: children }) : null;
 
   if (!focusId) {
