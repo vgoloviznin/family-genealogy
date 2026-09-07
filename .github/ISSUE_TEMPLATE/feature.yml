@@ -1,0 +1,33 @@
+name: Feature request
+description: Propose a new capability or UX improvement
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check [AGENTS.md](../AGENTS.md) non-goals (GEDCOM, full-text search, automatic person merge) before requesting those.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Optional.
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This is not GEDCOM import/export, FTS, or automatic UUID person merging (unless maintainers already agreed).
+          required: true

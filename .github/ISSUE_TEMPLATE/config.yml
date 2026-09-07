@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Sync / merge help
+    url: https://github.com/vgoloviznin/family-genealogy/blob/main/AGENTS.md#project-sync-fgtree-merge
+    about: Developer notes for .fgtree merge (also see in-app Sync → Help).

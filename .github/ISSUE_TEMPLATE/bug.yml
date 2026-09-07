@@ -1,0 +1,37 @@
+name: Bug report
+description: Something is broken or unexpected
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please avoid pasting real personal/family data.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Expected vs actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. …
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version / OS
+      description: e.g. v0.3.2, macOS 15 arm64 / Windows 11 x64
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / screenshots
+      description: Optional. Redact personal names and paths.
