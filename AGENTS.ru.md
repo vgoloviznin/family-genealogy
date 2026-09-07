@@ -127,3 +127,4 @@ Electron-диалоги и окна мокаются в `tests/setup/vitest.setu
 
 - Не коммитить `.env`, ключи, личные данные из тестовых проектов.
 - `node_modules/`, `out/`, `release/` — в `.gitignore`.
+- Уязвимости: [SECURITY.md](./SECURITY.md) (предпочтительно private advisory; не публичный issue).

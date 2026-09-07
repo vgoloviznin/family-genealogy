@@ -96,6 +96,12 @@ tests/          Vitest (mirrors src/)
 
 Releases are cut from `v*` tags after a version bump on `main` — see [AGENTS.md](./AGENTS.md).
 
+## Community
+
+- [Contributing](./CONTRIBUTING.md)
+- [Code of Conduct](./CODE_OF_CONDUCT.md)
+- [Security policy](./SECURITY.md)
+
 ## License
 
 [MIT](./LICENSE)

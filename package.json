@@ -1,5 +1,5 @@
 {
-  "name": "family-geneology",
+  "name": "family-genealogy",
   "version": "0.3.2",
   "description": "Local-first family archive for macOS and Windows — offline .fgtree sync, no server",
   "main": "./out/main/index.js",
