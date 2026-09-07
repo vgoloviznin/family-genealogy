@@ -1,117 +1,106 @@
 # Family Genealogy
 
-Desktop-приложение для ведения семейного архива на **macOS** и **Windows**. Все данные хранятся локально в выбранной папке; для обмена, резервного копирования и **синхронизации** используется один файл **`.fgtree`**.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![CI](https://github.com/vgoloviznin/family-genealogy/actions/workflows/ci.yml/badge.svg)](https://github.com/vgoloviznin/family-genealogy/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/vgoloviznin/family-genealogy)](https://github.com/vgoloviznin/family-genealogy/releases)
 
-## Возможности
+**Local-first family archive for macOS and Windows.** No account, no server — your tree lives in a folder on disk. Relatives share and merge updates with a single **`.fgtree`** file.
 
-- Создание и открытие проекта в любой локальной папке
-- Карточки людей: ФИО, пол, даты рождения/смерти, заметки, фото
-- Семейные связи: партнёры, дети, родители; связь **существующих** людей; тип союза и родства
-- События жизни с частичными датами и местами (с подсказками)
-- Источники и цитаты (книга, архив, документ, устный рассказ и др.)
-- Ассоциации: крёстные, свидетели и т.п.
-- Медиафайлы с превью и главным фото
-- Интерактивное **древо** предков и потомков от выбранного человека
-- Экспорт / импорт / бэкап в `.fgtree`
-- **Синхронизация** локальных копий одного проекта через `.fgtree` (merge одного или нескольких архивов)
-- Отмена последних действий (до 5 шагов)
+[Русский](./README.ru.md)
 
-## Скачать
+## Why this app
 
-Готовые установщики публикуются в [GitHub Releases](https://github.com/vgoloviznin/family-genealogy/releases):
+- **vs cloud genealogy (MyHeritage, Ancestry, …):** your data stays on your computer; sync is a file you control, not a subscription silo.
+- **vs Gramps / Ancestris:** modern desktop UI and **offline merge** of the same project without treating GEDCOM as the sync path. (GEDCOM import/export is intentionally out of scope for now.)
+- **vs “just a tree” apps:** people, relationships, life events, places, sources & citations, media, and an interactive ancestor/descendant tree.
 
-- **macOS Apple Silicon:** `*-arm64.dmg`
-- **Windows x64:** `*Setup*.exe`
+## Screenshots
 
-Сборки **не подписаны** (ad-hoc на macOS):
+Product screenshots (`tree.png`, `person.png`, `sync.png`) live in [docs/screenshots/](docs/screenshots/). Capture guidelines and filenames: [docs/screenshots/README.md](docs/screenshots/README.md). PRs that add them are welcome (`good first issue`).
 
-- **macOS:** Gatekeeper предупредит о неидентифицированном разработчике. На macOS 15+ откройте **Системные настройки → Конфиденциальность и безопасность** и разрешите запуск; либо снимите quarantine: `xattr -cr "/Applications/Family Genealogy.app"`.
-- **Windows:** SmartScreen → «Подробнее» → «Выполнить в любом случае».
+## Features
 
-## Требования (разработка)
+- Projects in any local folder (`project.json` + SQLite + media)
+- People: names, sex, birth/death dates, notes, primary photo
+- Family links: partners, children, parents; union and kinship types
+- Life events with partial dates and place suggestions
+- Sources and citations (book, archive, document, oral history, …)
+- Associations (godparents, witnesses, …)
+- Media with thumbnails
+- Interactive **tree** of ancestors and descendants
+- Export / import / backup via **`.fgtree`**
+- **Sync** local copies of the same `projectId` (single or batch merge)
+- Undo (up to 5 steps)
+- UI languages: **ru** / **en** / **it**
 
-- **Node.js** 22+ (см. `.nvmrc`)
-- **macOS** (Apple Silicon) или **Windows** x64 для локальной сборки соответствующей платформы
+## Download
 
-## Быстрый старт
+Installers: [GitHub Releases](https://github.com/vgoloviznin/family-genealogy/releases)
+
+| Platform | Artifact |
+|----------|----------|
+| macOS Apple Silicon | `*-arm64.dmg` |
+| Windows x64 | `*Setup*.exe` |
+
+Builds are **unsigned** (ad-hoc on macOS):
+
+- **macOS:** Gatekeeper will warn. On macOS 15+: **System Settings → Privacy & Security** and allow; or `xattr -cr "/Applications/Family Genealogy.app"`.
+- **Windows:** SmartScreen → **More info** → **Run anyway**.
+
+## Quick start (development)
+
+**Node.js 22+** (see `.nvmrc`). macOS arm64 or Windows x64 for a local platform build.
 
 ```bash
 npm install
 npm run dev
 ```
 
-При первом запуске нужно указать язык, имя редактора и папку для бэкапов — без этого нельзя создать, открыть или импортировать проект. Отмена последних действий: меню «Правка» → «Отменить» (`Cmd/Ctrl+Z`).
-
-## Сборка
-
-Локально:
+On first launch, set language, editor name, and a backup folder — required before create / open / import.
 
 ```bash
-# macOS arm64 (.dmg)
-npm run build:mac
-
-# Windows x64 (NSIS)
-npm run build:win
-```
-
-Артефакты — в каталоге `release/`. CI собирает те же цели по git-тегу `v*` (см. ниже).
-
-## Как выпустить версию
-
-1. Ветка с бампом `"version"` в `package.json` → PR в `main` → зелёный CI → merge.
-2. На SHA merge: `git tag vX.Y.Z && git push origin vX.Y.Z` (номер тега без `v` = `version` в `package.json`).
-3. Workflow **Release** соберёт DMG (macOS arm64) и NSIS (Windows x64) и создаст GitHub Release с артефактами.
-
-Фичи и фиксы — только через PR в `main` (прямые push в `main` запрещены ruleset’ом).
-
-## Разработка
-
-```bash
-npm run test        # unit-тесты (один прогон)
-npm run test:watch  # watch-режим
+npm run test        # unit tests
 npm run lint        # ESLint + Prettier
-npm run lint:fix   # автоисправление
-npm run format      # форматирование через Prettier
+npm run build:mac   # DMG (arm64)
+npm run build:win   # NSIS (x64)
 ```
 
-Версии зависимостей в `package.json` зафиксированы без `^`/`~`. CI на PR: lint + test.
+## Data layout
 
-## Формат данных
+| Path | Role |
+|------|------|
+| `project.json` | Project id, name, schema version |
+| `family.sqlite` | SQLite database (WAL) |
+| `media/` | Original photos and documents |
+| `thumbs/` | Image previews |
 
-### Рабочая папка проекта
+**`.fgtree`** is a ZIP64 pack (manifest, DB, media, thumbs) for transfer, backup, and **serverless merge**. Pass it through cloud storage as a **file** — do **not** put the live project folder in Dropbox / iCloud / OneDrive (SQLite can corrupt).
 
-| Файл / каталог   | Назначение                          |
-|------------------|-------------------------------------|
-| `project.json`   | ID проекта, имя, версия схемы       |
-| `family.sqlite`  | База SQLite (WAL)                   |
-| `media/`         | Оригиналы документов и фото         |
-| `thumbs/`        | Превью изображений                  |
+Merge details for developers: [AGENTS.md](./AGENTS.md). In-app sync help: sync menu → Help.
 
-### Архив `.fgtree`
+## For contributors & coding agents
 
-ZIP64-пакет с manifest, базой, медиа и превью. Используется для:
+This repo is set up for humans and AI coding agents:
 
-- переноса между компьютерами;
-- резервного копирования;
-- обмена и **синхронизации** копий одного `projectId` (merge без сервера);
-- передачи через облако **как файл**, не как живая база.
-
-> **Важно:** не храните рабочую папку проекта в Dropbox / iCloud / OneDrive — SQLite может повредиться. Для облака используйте экспорт `.fgtree`.
-
-Краткая справка по синхронизации есть в приложении (меню синхронизации → справка). Подробности для разработчиков — в [AGENTS.md](./AGENTS.md).
-
-## Структура репозитория
+- **[CONTRIBUTING.md](./CONTRIBUTING.md)** — branches, PRs, lint/test, i18n
+- **[AGENTS.md](./AGENTS.md)** — stack, IPC/schema rules, merge semantics, non-goals
+- Open issues labeled [`good first issue`](https://github.com/vgoloviznin/family-genealogy/labels/good%20first%20issue)
 
 ```
-src/main/       — Electron main process, сервисы, БД
-src/preload/    — безопасный мост API для renderer
-src/renderer/   — React-интерфейс
-src/shared/     — общие типы и IPC-контракт
-tests/          — unit-тесты (зеркало src/ + helpers, setup)
+src/main/       Electron main, services, DB
+src/preload/    contextBridge API (`window.api`)
+src/renderer/   React UI
+src/shared/     shared types and IPC contract
+tests/          Vitest (mirrors src/)
 ```
 
-Подробнее для агентов и контрибьюторов — [AGENTS.md](./AGENTS.md).
+Releases are cut from `v*` tags after a version bump on `main` — see [AGENTS.md](./AGENTS.md).
 
-## Лицензия
+## License
 
-MIT
+[MIT](./LICENSE)
+
+## After the storefront
+
+Maintainers: post-merge marketing checklist is in [docs/EXPOSURE.md](docs/EXPOSURE.md) (do not spam channels before screenshots land).
+

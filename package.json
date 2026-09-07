@@ -1,10 +1,30 @@
 {
   "name": "family-geneology",
   "version": "0.3.2",
-  "description": "Genealogy family tree desktop app",
+  "description": "Local-first family archive for macOS and Windows — offline .fgtree sync, no server",
   "main": "./out/main/index.js",
-  "author": "",
+  "author": "Vsevolod Goloviznin",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vgoloviznin/family-genealogy.git"
+  },
+  "homepage": "https://github.com/vgoloviznin/family-genealogy#readme",
+  "bugs": {
+    "url": "https://github.com/vgoloviznin/family-genealogy/issues"
+  },
+  "keywords": [
+    "genealogy",
+    "family-tree",
+    "electron",
+    "local-first",
+    "sqlite",
+    "privacy",
+    "typescript",
+    "macos",
+    "windows",
+    "offline"
+  ],
   "scripts": {
     "dev": "node scripts/electron-vite.mjs dev",
     "build": "electron-vite build",
