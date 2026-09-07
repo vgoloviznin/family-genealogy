@@ -9,7 +9,7 @@ Security fixes are applied to the **latest release** on [GitHub Releases](https:
 Please **do not** open a public issue for security problems.
 
 Report via [GitHub Private Vulnerability Reporting](https://github.com/vgoloviznin/family-genealogy/security/advisories/new).  
-If that form is unavailable, enable it under **Settings → Code security → Private vulnerability reporting**, or contact the [repository owner on GitHub](https://github.com/vgoloviznin) without posting exploit details publicly.
+If you cannot use that form, contact the [repository owner on GitHub](https://github.com/vgoloviznin) without posting exploit details publicly.
 
 Include:
 
