@@ -125,3 +125,4 @@ Electron dialogs/windows are mocked in `tests/setup/vitest.setup.ts` (`initAppLo
 
 - Do not commit `.env`, secrets, or personal data from real test projects.
 - `node_modules/`, `out/`, `release/` are gitignored.
+- Vulnerability reports: [SECURITY.md](./SECURITY.md) (private advisory preferred; no public issues).

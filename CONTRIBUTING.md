@@ -2,6 +2,8 @@
 
 Thanks for helping improve **Family Genealogy**.
 
+By participating, you agree to follow the [Code of Conduct](./CODE_OF_CONDUCT.md). To report a security issue, see [SECURITY.md](./SECURITY.md) (do not open a public issue).
+
 Short Russian note: ветки `feat/` / `fix/` → PR в `main`; перед PR — `npm run lint` и `npm run test`; новые строки UI только через ключи в `src/shared/locales/`. Подробности для агентов: [AGENTS.md](./AGENTS.md) / [AGENTS.ru.md](./AGENTS.ru.md).
 
 ## Setup

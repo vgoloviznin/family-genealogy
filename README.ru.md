@@ -82,6 +82,7 @@ npm run build:win
 
 - **[CONTRIBUTING.md](./CONTRIBUTING.md)**
 - **[AGENTS.md](./AGENTS.md)**
+- **[CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md)** / **[SECURITY.md](./SECURITY.md)**
 - Issues с меткой [`good first issue`](https://github.com/vgoloviznin/family-genealogy/labels/good%20first%20issue)
 
 ## Лицензия
