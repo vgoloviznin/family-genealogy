@@ -131,6 +131,51 @@ function partnerAt(id: string, generation: number, partnerPairs: Array<[string, 
   return null;
 }
 
+type SpouseSide = 'left' | 'right';
+
+/** Married children go to the ends so in-law spouses sit outside the sibling pack (avoids bar/stem crossings). */
+function siblingLayoutOrder(
+  children: string[],
+  generations: Map<string, number>,
+  partnerPairs: Array<[string, string]>
+): Array<{ id: string; spouseSide: SpouseSide | null }> {
+  if (children.length === 0) {
+    return [];
+  }
+  const married: string[] = [];
+  const single: string[] = [];
+  for (const id of children) {
+    const gen = generations.get(id) ?? 0;
+    if (partnerAt(id, gen, partnerPairs, generations)) {
+      married.push(id);
+    } else {
+      single.push(id);
+    }
+  }
+  if (married.length === 0) {
+    return children.map((id) => ({ id, spouseSide: null }));
+  }
+  const ordered = [married[0], ...single, ...married.slice(1)];
+  return ordered.map((id, index) => {
+    const gen = generations.get(id) ?? 0;
+    if (!partnerAt(id, gen, partnerPairs, generations)) {
+      return { id, spouseSide: null };
+    }
+    // Only park the spouse outside a multi-child pack; a lone child keeps child|spouse order.
+    if (index === 0 && ordered.length > 1) {
+      return { id, spouseSide: 'left' };
+    }
+    return { id, spouseSide: 'right' };
+  });
+}
+
+function coupleBlockWidth(id: string, spouse: string | null, nodeWidths: Map<string, number>): number {
+  if (!spouse) {
+    return nodeWidth(id, nodeWidths);
+  }
+  return nodeWidth(id, nodeWidths) + PEDIGREE_COUPLE_GAP + nodeWidth(spouse, nodeWidths);
+}
+
 /** Поколения: от фокуса, дети строго ниже родителей, супруги в одном ряду */
 export function assignLayoutGenerations(
   nodeIds: string[],
@@ -182,6 +227,17 @@ export function assignLayoutGenerations(
       const want = gen.get(parent)! + 1;
       if (!gen.has(child) || gen.get(child)! < want) {
         gen.set(child, want);
+        changed = true;
+      }
+    }
+    // Keep natal parents one row above a child pushed down by marriage (avoid multi-row stems).
+    for (const [parent, child] of parentPairs) {
+      if (!known.has(parent) || !known.has(child) || !gen.has(parent) || !gen.has(child)) {
+        continue;
+      }
+      const wantParent = gen.get(child)! - 1;
+      if (gen.get(parent)! < wantParent) {
+        gen.set(parent, wantParent);
         changed = true;
       }
     }
@@ -276,8 +332,9 @@ function measureFamily(
   }
 
   let childrenRow = 0;
-  for (let i = 0; i < family.children.length; i++) {
-    childrenRow += measureChildSlot(family.children[i], generations, partnerPairs, families, widths, nodeWidths, measuring);
+  const ordered = siblingLayoutOrder(family.children, generations, partnerPairs);
+  for (let i = 0; i < ordered.length; i++) {
+    childrenRow += measureChildSlot(ordered[i].id, generations, partnerPairs, families, widths, nodeWidths, measuring);
     if (i > 0) {
       childrenRow += PEDIGREE_SIBLING_GAP;
     }
@@ -336,13 +393,6 @@ function cardLeft(id: string, positions: Map<string, { x: number; y: number }>, 
 
 function cardRight(id: string, positions: Map<string, { x: number; y: number }>, nodeWidths: Map<string, number>): number {
   return positions.get(id)!.x + nodeWidth(id, nodeWidths) / 2;
-}
-
-function coupleBlockWidth(id: string, spouse: string | null, nodeWidths: Map<string, number>): number {
-  if (!spouse) {
-    return nodeWidth(id, nodeWidths);
-  }
-  return nodeWidth(id, nodeWidths) + PEDIGREE_COUPLE_GAP + nodeWidth(spouse, nodeWidths);
 }
 
 /** Сдвигает всех, кто правее якоря — относительная геометрия дерева сохраняется */
@@ -420,13 +470,14 @@ function attachFamilyToPlacedChildren(
   const childGen = generations.get(family.children[0]) ?? 0;
 
   if (unplacedKids.length > 0) {
+    const ordered = siblingLayoutOrder(unplacedKids, generations, partnerPairs);
     let cursor = Math.max(...placedKids.map((c) => rightEdge(c, positions, nodeWidths, childGen, partnerPairs, generations, placed)));
-    for (const childId of unplacedKids) {
-      const spouse = partnerAt(childId, childGen, partnerPairs, generations);
-      const slotW = widths.get(`child:${childId}`) ?? coupleBlockWidth(childId, spouse && !placed.has(spouse) ? spouse : null, nodeWidths);
+    for (const entry of ordered) {
+      const spouse = partnerAt(entry.id, childGen, partnerPairs, generations);
+      const slotW = widths.get(`child:${entry.id}`) ?? coupleBlockWidth(entry.id, spouse && !placed.has(spouse) ? spouse : null, nodeWidths);
       const centerX = cursor + PEDIGREE_SIBLING_GAP + slotW / 2;
-      placeChild(childId, centerX, generations, partnerPairs, families, positions, placed, widths, nodeWidths);
-      cursor = rightEdge(childId, positions, nodeWidths, childGen, partnerPairs, generations, placed);
+      placeChild(entry.id, centerX, generations, partnerPairs, families, positions, placed, widths, nodeWidths, entry.spouseSide);
+      cursor = rightEdge(entry.id, positions, nodeWidths, childGen, partnerPairs, generations, placed);
     }
   }
 
@@ -445,19 +496,25 @@ function placeChild(
   positions: Map<string, { x: number; y: number }>,
   placed: Set<string>,
   widths: Map<string, number>,
-  nodeWidths: Map<string, number>
+  nodeWidths: Map<string, number>,
+  spouseSide: SpouseSide | null = 'right'
 ) {
   const gen = generations.get(childId) ?? 0;
   const y = gen * PEDIGREE_NODE_H;
   const spouse = partnerAt(childId, gen, partnerPairs, generations);
 
   if (!placed.has(childId)) {
-    if (spouse && !placed.has(spouse)) {
+    if (spouse && !placed.has(spouse) && spouseSide) {
       const w1 = nodeWidth(childId, nodeWidths);
       const w2 = nodeWidth(spouse, nodeWidths);
       const rowWidth = w1 + PEDIGREE_COUPLE_GAP + w2;
-      positions.set(childId, { x: centerX - rowWidth / 2 + w1 / 2, y });
-      positions.set(spouse, { x: centerX + rowWidth / 2 - w2 / 2, y });
+      if (spouseSide === 'left') {
+        positions.set(spouse, { x: centerX - rowWidth / 2 + w2 / 2, y });
+        positions.set(childId, { x: centerX + rowWidth / 2 - w1 / 2, y });
+      } else {
+        positions.set(childId, { x: centerX - rowWidth / 2 + w1 / 2, y });
+        positions.set(spouse, { x: centerX + rowWidth / 2 - w2 / 2, y });
+      }
       placed.add(childId);
       placed.add(spouse);
     } else {
@@ -513,15 +570,16 @@ function placeFamily(
     if (family.children.length === 0) {
       return;
     }
-    const childWidths = family.children.map(
-      (childId) => widths.get(`child:${childId}`) ?? measureChildSlot(childId, generations, partnerPairs, families, widths, nodeWidths, new Set())
+    const ordered = siblingLayoutOrder(family.children, generations, partnerPairs);
+    const childWidths = ordered.map(
+      (entry) => widths.get(`child:${entry.id}`) ?? measureChildSlot(entry.id, generations, partnerPairs, families, widths, nodeWidths, new Set())
     );
     const totalWidth = childWidths.reduce((sum, w, i) => sum + w + (i > 0 ? PEDIGREE_SIBLING_GAP : 0), 0);
     let cursor = centerX - totalWidth / 2;
-    for (let i = 0; i < family.children.length; i++) {
-      const childId = family.children[i];
+    for (let i = 0; i < ordered.length; i++) {
+      const entry = ordered[i];
       const slotW = childWidths[i];
-      placeChild(childId, cursor + slotW / 2, generations, partnerPairs, families, positions, placed, widths, nodeWidths);
+      placeChild(entry.id, cursor + slotW / 2, generations, partnerPairs, families, positions, placed, widths, nodeWidths, entry.spouseSide);
       cursor += slotW + PEDIGREE_SIBLING_GAP;
     }
     return;
@@ -536,16 +594,17 @@ function placeFamily(
     return;
   }
 
-  const childWidths = family.children.map(
-    (childId) => widths.get(`child:${childId}`) ?? measureChildSlot(childId, generations, partnerPairs, families, widths, nodeWidths, new Set())
+  const ordered = siblingLayoutOrder(family.children, generations, partnerPairs);
+  const childWidths = ordered.map(
+    (entry) => widths.get(`child:${entry.id}`) ?? measureChildSlot(entry.id, generations, partnerPairs, families, widths, nodeWidths, new Set())
   );
   const totalWidth = childWidths.reduce((sum, w, i) => sum + w + (i > 0 ? PEDIGREE_SIBLING_GAP : 0), 0);
   let cursor = centerX - totalWidth / 2;
 
-  for (let i = 0; i < family.children.length; i++) {
-    const childId = family.children[i];
+  for (let i = 0; i < ordered.length; i++) {
+    const entry = ordered[i];
     const slotW = childWidths[i];
-    placeChild(childId, cursor + slotW / 2, generations, partnerPairs, families, positions, placed, widths, nodeWidths);
+    placeChild(entry.id, cursor + slotW / 2, generations, partnerPairs, families, positions, placed, widths, nodeWidths, entry.spouseSide);
     cursor += slotW + PEDIGREE_SIBLING_GAP;
   }
 
@@ -735,18 +794,42 @@ export function familyConnectorSegments(connector: FamilyConnector, nodeWidths: 
   }
 
   const stemX = connector.unionX;
-  pushSegment({
-    id: `${familyId}-stem`,
-    kind: 'parent',
-    x1: stemX,
-    y1: connector.unionY,
-    x2: stemX,
-    y2: connector.childBarY
-  });
-
   const childXs = connector.children.map((c) => c.x);
-  const barLeft = Math.min(stemX, ...childXs);
-  const barRight = Math.max(stemX, ...childXs);
+  const childrenMidX = childXs.reduce((sum, x) => sum + x, 0) / childXs.length;
+  // Join parents to the children pack with an elbow when the couple sits off to the side (in-law column).
+  const barJoinX = Math.min(Math.max(stemX, Math.min(...childXs)), Math.max(...childXs));
+  const useElbow = Math.abs(stemX - childrenMidX) > 40 && Math.abs(stemX - barJoinX) > 1;
+
+  if (useElbow) {
+    pushSegment({
+      id: `${familyId}-stem`,
+      kind: 'parent',
+      x1: stemX,
+      y1: connector.unionY,
+      x2: stemX,
+      y2: connector.childBarY
+    });
+    pushSegment({
+      id: `${familyId}-stem-jog`,
+      kind: 'parent',
+      x1: stemX,
+      y1: connector.childBarY,
+      x2: barJoinX,
+      y2: connector.childBarY
+    });
+  } else {
+    pushSegment({
+      id: `${familyId}-stem`,
+      kind: 'parent',
+      x1: stemX,
+      y1: connector.unionY,
+      x2: stemX,
+      y2: connector.childBarY
+    });
+  }
+
+  const barLeft = Math.min(...childXs);
+  const barRight = Math.max(...childXs);
   if (barRight - barLeft > 0.5) {
     pushSegment({
       id: `${familyId}-child-bar`,
