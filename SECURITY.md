@@ -8,10 +8,8 @@ Security fixes are applied to the **latest release** on [GitHub Releases](https:
 
 Please **do not** open a public issue for security problems.
 
-Prefer one of:
-
-1. [GitHub Private Vulnerability Reporting](https://github.com/vgoloviznin/family-genealogy/security/advisories/new) (recommended — enable under **Settings → Code security → Private vulnerability reporting** if the form is unavailable)
-2. Email the maintainer: **vsevolod.goloviznin@gmail.com** (subject prefix `[security]`)
+Report via [GitHub Private Vulnerability Reporting](https://github.com/vgoloviznin/family-genealogy/security/advisories/new).  
+If that form is unavailable, enable it under **Settings → Code security → Private vulnerability reporting**, or contact the [repository owner on GitHub](https://github.com/vgoloviznin) without posting exploit details publicly.
 
 Include:
 

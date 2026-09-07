@@ -59,8 +59,9 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement at
-**vsevolod.goloviznin@gmail.com**.
+reported to the community leaders responsible for enforcement by contacting the
+[repository owner on GitHub](https://github.com/vgoloviznin). Do **not** post
+incident details in a public issue; ask for a private channel first.
 
 All complaints will be reviewed and investigated promptly and fairly.
 
