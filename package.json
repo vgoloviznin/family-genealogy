@@ -31,7 +31,7 @@
     "preview": "node scripts/electron-vite.mjs preview",
     "postinstall": "electron-builder install-app-deps && node node_modules/electron/install.js",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
-    "build:mac": "npm run build && electron-builder --mac --config",
+    "build:mac": "npm run build && electron-builder --mac --arm64 --x64 --config",
     "build:win": "npm run build && electron-builder --win --config",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" \"*.ts\"",
     "lint:fix": "npm run lint -- --fix",
@@ -121,11 +121,13 @@
     "mac": {
       "icon": "build/icon.icns",
       "identity": "-",
+      "artifactName": "${productName}-${version}-${arch}.${ext}",
       "target": [
         {
           "target": "dmg",
           "arch": [
-            "arm64"
+            "arm64",
+            "x64"
           ]
         }
       ],

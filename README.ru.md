@@ -40,6 +40,7 @@
 | Платформа | Артефакт |
 |-----------|----------|
 | macOS Apple Silicon | `*-arm64.dmg` |
+| macOS Intel | `*-x64.dmg` |
 | Windows x64 | `*Setup*.exe` |
 
 Сборки **не подписаны** (ad-hoc на macOS):
