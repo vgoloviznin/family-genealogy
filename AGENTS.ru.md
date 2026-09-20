@@ -19,7 +19,7 @@ Desktop-приложение для ведения семейного архив
 - Порядок релиза:
   1. PR с бампом `"version"` в `package.json` (и `package-lock.json`) → merge в `main`.
   2. На SHA merge: `git tag vX.Y.Z && git push origin vX.Y.Z` — номер без `v` **должен совпадать** с `version` в `package.json` (проверка в workflow).
-  3. [`.github/workflows/release.yml`](.github/workflows/release.yml) собирает **macOS arm64** (DMG, ad-hoc `identity: "-"`) и **Windows x64** (NSIS) и создаёт [GitHub Release](https://github.com/vgoloviznin/family-genealogy/releases) с артефактами.
+  3. [`.github/workflows/release.yml`](.github/workflows/release.yml) собирает **macOS arm64 + Intel x64** (DMG, ad-hoc `identity: "-"`) и **Windows x64** (NSIS) и создаёт [GitHub Release](https://github.com/vgoloviznin/family-genealogy/releases) с артефактами.
 - CI на PR/`main`: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — `lint` + `test` (Node из `.nvmrc`; после `npm ci` — `npm rebuild better-sqlite3 sharp` для vitest).
 - Сборки **не подписаны** сертификатами (Gatekeeper / SmartScreen). Подпись Apple/Authenticode — вне текущего процесса.
 - Подробности для пользователей — README («Скачать», «Как выпустить версию»).
@@ -89,7 +89,7 @@ npm install
 npm run dev          # разработка
 npm run build        # сборка
 npm run test         # unit-тесты (vitest)
-npm run build:mac    # dmg для macOS arm64 (ad-hoc identity)
+npm run build:mac    # dmg для macOS arm64 + Intel x64 (ad-hoc identity)
 npm run build:win    # NSIS для Windows x64
 ```
 

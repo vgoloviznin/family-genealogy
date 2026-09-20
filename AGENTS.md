@@ -19,7 +19,7 @@ Repo: [vgoloviznin/family-genealogy](https://github.com/vgoloviznin/family-genea
 - Release flow:
   1. PR bumping `"version"` in `package.json` (+ lockfile) → merge to `main`.
   2. On merge SHA: `git tag vX.Y.Z && git push origin vX.Y.Z` — tag without `v` **must match** `package.json` `version` (workflow check).
-  3. [`.github/workflows/release.yml`](.github/workflows/release.yml) builds **macOS arm64** (DMG, ad-hoc `identity: "-"`) and **Windows x64** (NSIS) → [GitHub Release](https://github.com/vgoloviznin/family-genealogy/releases).
+  3. [`.github/workflows/release.yml`](.github/workflows/release.yml) builds **macOS arm64 + Intel x64** (DMG, ad-hoc `identity: "-"`) and **Windows x64** (NSIS) → [GitHub Release](https://github.com/vgoloviznin/family-genealogy/releases).
 - CI on PR/`main`: [`.github/workflows/ci.yml`](.github/workflows/ci.yml) — lint + test (Node from `.nvmrc`; after `npm ci` rebuild `better-sqlite3` and `sharp` for vitest).
 - Builds are **unsigned** (Gatekeeper / SmartScreen). Apple/Authenticode signing is out of process.
 - User-facing download notes: [README.md](./README.md).
@@ -89,7 +89,7 @@ npm install
 npm run dev          # development
 npm run build        # production build
 npm run test         # unit tests (vitest)
-npm run build:mac    # macOS arm64 DMG (ad-hoc identity)
+npm run build:mac    # macOS arm64 + Intel x64 DMGs (ad-hoc identity)
 npm run build:win    # Windows x64 NSIS
 ```
 

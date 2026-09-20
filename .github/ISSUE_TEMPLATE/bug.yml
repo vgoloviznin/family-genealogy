@@ -27,7 +27,7 @@ body:
     id: version
     attributes:
       label: App version / OS
-      description: e.g. v0.3.2, macOS 15 arm64 / Windows 11 x64
+      description: e.g. v0.3.2, macOS 15 arm64 / macOS 15 Intel / Windows 11 x64
     validations:
       required: true
   - type: textarea

@@ -42,13 +42,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build macOS arm64 DMG
+      - name: Build macOS DMGs (arm64 + Intel x64)
         if: matrix.platform == 'mac'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
           npm run build
-          npx electron-builder --mac --arm64 --publish never
+          npx electron-builder --mac --arm64 --x64 --publish never
 
       - name: Build Windows x64 NSIS
         if: matrix.platform == 'win'
@@ -56,12 +56,20 @@ jobs:
           npm run build
           npx electron-builder --win --x64 --publish never
 
-      - name: Upload macOS artifact
+      - name: Upload macOS arm64 artifact
         if: matrix.platform == 'mac'
         uses: actions/upload-artifact@v5
         with:
           name: macos-arm64
-          path: release/*.dmg
+          path: release/*-arm64.dmg
+          if-no-files-found: error
+
+      - name: Upload macOS Intel x64 artifact
+        if: matrix.platform == 'mac'
+        uses: actions/upload-artifact@v5
+        with:
+          name: macos-x64
+          path: release/*-x64.dmg
           if-no-files-found: error
 
       - name: Upload Windows artifact

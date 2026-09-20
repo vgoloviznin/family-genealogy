@@ -40,6 +40,7 @@ Installers: [GitHub Releases](https://github.com/vgoloviznin/family-genealogy/re
 | Platform | Artifact |
 |----------|----------|
 | macOS Apple Silicon | `*-arm64.dmg` |
+| macOS Intel | `*-x64.dmg` |
 | Windows x64 | `*Setup*.exe` |
 
 Builds are **unsigned** (ad-hoc on macOS):
@@ -49,7 +50,7 @@ Builds are **unsigned** (ad-hoc on macOS):
 
 ## Quick start (development)
 
-**Node.js 22+** (see `.nvmrc`). macOS arm64 or Windows x64 for a local platform build.
+**Node.js 22+** (see `.nvmrc`). macOS (arm64 or Intel) or Windows x64 for a local platform build.
 
 ```bash
 npm install
@@ -61,7 +62,7 @@ On first launch, set language, editor name, and a backup folder — required bef
 ```bash
 npm run test        # unit tests
 npm run lint        # ESLint + Prettier
-npm run build:mac   # DMG (arm64)
+npm run build:mac   # DMG (arm64 + Intel x64)
 npm run build:win   # NSIS (x64)
 ```
 
