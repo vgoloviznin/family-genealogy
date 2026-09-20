@@ -9,7 +9,7 @@ description: >-
 
 # GitHub Release (tagged installers)
 
-Publish macOS arm64 DMG and Windows x64 NSIS via `.github/workflows/release.yml`.
+Publish macOS arm64 + Intel x64 DMGs and Windows x64 NSIS via `.github/workflows/release.yml`.
 
 Installers are **not** built on merge to `main`. They are built only when a git tag matching `v*` is **pushed**. Creating a GitHub Release in the UI does **not** run that workflow unless the tag name is `vX.Y.Z`.
 
@@ -138,7 +138,7 @@ Do **not** wait in-chat for mac + win builds (several minutes). Immediately:
    gh run list --workflow=release.yml --limit 3
    ```
 
-3. Report expected release page: `https://github.com/vgoloviznin/family-genealogy/releases/tag/vX.Y.Z` (assets appear when `publish` finishes: `*.dmg`, `*Setup*.exe`).
+3. Report expected release page: `https://github.com/vgoloviznin/family-genealogy/releases/tag/vX.Y.Z` (assets appear when `publish` finishes: `*-arm64.dmg`, `*-x64.dmg`, `*Setup*.exe`).
 
 Optional: if the user asks to wait, then `gh run watch` / re-check assets.
 
