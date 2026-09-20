@@ -31,7 +31,7 @@
     "preview": "node scripts/electron-vite.mjs preview",
     "postinstall": "electron-builder install-app-deps && node node_modules/electron/install.js",
     "rebuild": "electron-rebuild -f -w better-sqlite3",
-    "build:mac": "npm run build && electron-builder --mac --arm64 --x64 --config",
+    "build:mac": "npm run build && node scripts/ensure-sharp-darwin-binaries.mjs && electron-builder --mac --arm64 --x64 --config && node scripts/verify-packaged-sharp-darwin.mjs",
     "build:win": "npm run build && electron-builder --win --config",
     "lint": "eslint \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\" \"*.ts\"",
     "lint:fix": "npm run lint -- --fix",
@@ -116,7 +116,8 @@
     ],
     "asarUnpack": [
       "node_modules/better-sqlite3/**",
-      "node_modules/sharp/**"
+      "**/node_modules/sharp/**/*",
+      "**/node_modules/@img/**/*"
     ],
     "mac": {
       "icon": "build/icon.icns",

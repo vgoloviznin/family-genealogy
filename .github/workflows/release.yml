@@ -48,7 +48,11 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: |
           npm run build
+          # npm ci on arm64 runners only installs @img/sharp-darwin-arm64;
+          # Intel DMGs need darwin-x64 binaries in the same tree.
+          node scripts/ensure-sharp-darwin-binaries.mjs
           npx electron-builder --mac --arm64 --x64 --publish never
+          node scripts/verify-packaged-sharp-darwin.mjs
 
       - name: Build Windows x64 NSIS
         if: matrix.platform == 'win'
