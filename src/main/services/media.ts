@@ -3,7 +3,6 @@ import { copyFileSync, createReadStream, existsSync, mkdirSync, statSync, unlink
 import { join, extname, basename, resolve, sep } from 'path';
 import { dialog, shell } from 'electron';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
-import sharp from 'sharp';
 import { getDatabase } from '../db/connection';
 import * as schema from '../db/schema';
 import { newId, nowIso } from '../utils/id';
@@ -203,11 +202,15 @@ async function importMediaFile(sourcePath: string, target: { personId?: string; 
   let thumbRelativePath: string | null = null;
   if (IMAGE_TYPES.has(mimeType)) {
     try {
+      // Lazy-load: a top-level sharp require crashes the whole app if the
+      // platform binary is missing (seen on Intel macOS DMGs).
+      const sharp = (await import('sharp')).default;
       thumbRelativePath = join('thumbs', `${id}.webp`);
       const thumbPath = join(project.path, thumbRelativePath);
       mkdirSync(join(project.path, 'thumbs'), { recursive: true });
       await sharp(destPath).resize(320, 320, { fit: 'inside' }).webp({ quality: 80 }).toFile(thumbPath);
-    } catch {
+    } catch (err) {
+      logError('media thumbnail failed', err);
       thumbRelativePath = null;
     }
   }

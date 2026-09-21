@@ -12,7 +12,12 @@ import { applyAppLocale } from './locale';
 import { setMenuWindow } from './menu';
 import { IPC_CHANNELS } from '@shared/types';
 import { validateLocale } from '@shared/locales';
-import { initLogging, logError } from './utils/log';
+import { initLogging, logError, logInfo } from './utils/log';
+
+/** Older Intel GPUs often fail to paint Chromium with HW acceleration (blank window). */
+if (process.platform === 'darwin' && process.arch === 'x64') {
+  app.disableHardwareAcceleration();
+}
 
 let mainWindow: BrowserWindow | null = null;
 let cachedAppIcon: Electron.NativeImage | null = null;
@@ -62,6 +67,7 @@ function createWindow(): void {
     minWidth: 960,
     minHeight: 640,
     show: false,
+    backgroundColor: '#f4f1eb',
     icon: getAppIcon(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -71,7 +77,31 @@ function createWindow(): void {
     }
   });
 
-  mainWindow.on('ready-to-show', () => mainWindow?.show());
+  let shown = false;
+  const showWindow = (reason: string) => {
+    if (shown || !mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+    shown = true;
+    logInfo(`showing main window (${reason})`);
+    mainWindow.show();
+  };
+
+  mainWindow.on('ready-to-show', () => showWindow('ready-to-show'));
+  // ready-to-show can hang on some Intel Mac GPU stacks; do not leave the window hidden forever.
+  mainWindow.webContents.once('did-finish-load', () => {
+    setTimeout(() => showWindow('did-finish-load-fallback'), 1500);
+  });
+  setTimeout(() => showWindow('timeout-fallback'), 5000);
+
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
+    logError('did-fail-load', { code, desc, url });
+    showWindow('did-fail-load');
+  });
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    logError('render-process-gone', details);
+  });
+
   setMenuWindow(mainWindow);
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -82,9 +112,9 @@ function createWindow(): void {
   });
 
   if (process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
+    void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
   }
 }
 
@@ -117,6 +147,12 @@ if (!gotLock) {
 
   app.whenReady().then(() => {
     initLogging();
+    logInfo('app ready', {
+      platform: process.platform,
+      arch: process.arch,
+      electron: process.versions.electron,
+      chrome: process.versions.chrome
+    });
     setDockIcon();
     const locale = validateLocale(getSettings().locale);
     initAppLocale(locale);

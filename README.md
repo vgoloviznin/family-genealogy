@@ -50,7 +50,7 @@ Builds are **unsigned** (ad-hoc on macOS):
 
 ## Quick start (development)
 
-**Node.js 22+** (see `.nvmrc`). macOS (arm64 or Intel) or Windows x64 for a local platform build.
+**Node.js 22+** (see `.nvmrc`). macOS 13+ (arm64 or Intel) or Windows x64 for a local platform build. Electron 44 requires macOS 13 Ventura or later.
 
 ```bash
 npm install
