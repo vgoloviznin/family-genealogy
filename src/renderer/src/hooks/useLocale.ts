@@ -17,17 +17,28 @@ export function useLocale() {
 
   useEffect(() => {
     let cancelled = false;
-    void window.api.settings.get().then(async (settings) => {
-      const next = validateLocale(settings.locale);
-      await i18n.changeLanguage(next);
-      if (cancelled) {
-        return;
-      }
-      applyDocumentLocale(next);
-      syncDocumentTitle();
-      setLocaleState(next);
-      setReady(true);
-    });
+    void window.api.settings
+      .get()
+      .then(async (settings) => {
+        const next = validateLocale(settings.locale);
+        await i18n.changeLanguage(next);
+        if (cancelled) {
+          return;
+        }
+        applyDocumentLocale(next);
+        syncDocumentTitle();
+        setLocaleState(next);
+        setReady(true);
+      })
+      .catch(() => {
+        if (cancelled) {
+          return;
+        }
+        applyDocumentLocale(DEFAULT_LOCALE);
+        syncDocumentTitle();
+        setLocaleState(DEFAULT_LOCALE);
+        setReady(true);
+      });
     return () => {
       cancelled = true;
     };
