@@ -20,10 +20,7 @@ import { initLogging, logError, logInfo } from './utils/log';
  * Older / driver-odd GPUs fail to paint Chromium with HW acceleration (blank window).
  * Darwin x64 (Intel Mac) and Windows are the known cases for this app.
  */
-if (
-  (process.platform === 'darwin' && process.arch === 'x64') ||
-  process.platform === 'win32'
-) {
+if ((process.platform === 'darwin' && process.arch === 'x64') || process.platform === 'win32') {
   app.disableHardwareAcceleration();
 }
 
