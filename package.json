@@ -1,6 +1,6 @@
 {
   "name": "family-genealogy",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "description": "Local-first family archive for macOS and Windows — offline .fgtree sync, no server",
   "main": "./out/main/index.js",
   "author": "Vsevolod Goloviznin",
@@ -120,7 +120,6 @@
       "**/node_modules/@img/**/*",
       "out/renderer/**"
     ],
-
     "mac": {
       "icon": "build/icon.icns",
       "identity": "-",
