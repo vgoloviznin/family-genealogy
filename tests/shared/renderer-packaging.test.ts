@@ -1,6 +1,12 @@
-import { resolve } from 'path';
+import { join, resolve } from 'path';
 import { describe, expect, it } from 'vitest';
-import { mimeTypeForPath, resolveUnderRoot, stripCrossoriginAttributes } from '@shared/renderer-packaging';
+import {
+  mimeTypeForPath,
+  resolveRendererRoot,
+  resolveUnderRoot,
+  rendererResponseHeaders,
+  stripCrossoriginAttributes
+} from '@shared/renderer-packaging';
 
 describe('stripCrossoriginAttributes', () => {
   it('removes bare and valued crossorigin attributes', () => {
@@ -29,6 +35,54 @@ describe('mimeTypeForPath', () => {
 
   it('falls back to octet-stream for unknown extensions', () => {
     expect(mimeTypeForPath('/out/renderer/assets/x.bin')).toBe('application/octet-stream');
+  });
+});
+
+describe('rendererResponseHeaders', () => {
+  it('sets Content-Type, Content-Length, and CORS for ESM', () => {
+    expect(rendererResponseHeaders('/x/assets/a.js', 42)).toEqual({
+      'Content-Type': 'text/javascript; charset=utf-8',
+      'Content-Length': '42',
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'no-cache'
+    });
+  });
+});
+
+describe('resolveRendererRoot', () => {
+  it('uses ../renderer in development', () => {
+    expect(
+      resolveRendererRoot({
+        dirname: '/app/out/main',
+        resourcesPath: '/app/resources',
+        isPackaged: false,
+        indexExists: () => false
+      })
+    ).toBe(join('/app/out/main', '../renderer'));
+  });
+
+  it('prefers app.asar.unpacked when index exists there', () => {
+    const resourcesPath = '/Apps/Family Genealogy/resources';
+    const unpacked = join(resourcesPath, 'app.asar.unpacked', 'out', 'renderer', 'index.html');
+    expect(
+      resolveRendererRoot({
+        dirname: join(resourcesPath, 'app.asar', 'out', 'main'),
+        resourcesPath,
+        isPackaged: true,
+        indexExists: (p) => p === unpacked
+      })
+    ).toBe(join(resourcesPath, 'app.asar.unpacked', 'out', 'renderer'));
+  });
+
+  it('falls back to asar sibling when unpacked index is missing', () => {
+    expect(
+      resolveRendererRoot({
+        dirname: '/resources/app.asar/out/main',
+        resourcesPath: '/resources',
+        isPackaged: true,
+        indexExists: () => false
+      })
+    ).toBe(join('/resources/app.asar/out/main', '../renderer'));
   });
 });
 

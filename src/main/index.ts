@@ -13,8 +13,8 @@ import { applyAppLocale } from './locale';
 import { setMenuWindow } from './menu';
 import { IPC_CHANNELS } from '@shared/types';
 import { validateLocale } from '@shared/locales';
-import { mimeTypeForPath, resolveUnderRoot } from '@shared/renderer-packaging';
-import { initLogging, logError, logInfo } from './utils/log';
+import { resolveRendererRoot, resolveUnderRoot, rendererResponseHeaders } from '@shared/renderer-packaging';
+import { initLogging, logError, logInfo, getLogFilePath } from './utils/log';
 
 /**
  * Older / driver-odd GPUs fail to paint Chromium with HW acceleration (blank window).
@@ -24,11 +24,13 @@ if ((process.platform === 'darwin' && process.arch === 'x64') || process.platfor
   app.disableHardwareAcceleration();
 }
 
-const APP_SCHEME = 'app';
+/** Unique scheme — avoid generic `app` collisions with tooling / OS handlers. */
+const APP_SCHEME = 'family-app';
 const APP_HOST = 'localhost';
 
 let mainWindow: BrowserWindow | null = null;
 let cachedAppIcon: Electron.NativeImage | null = null;
+let cachedRendererRoot: string | null = null;
 
 function getAppIcon(): Electron.NativeImage {
   if (!cachedAppIcon) {
@@ -79,18 +81,26 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 function rendererRoot(): string {
-  return join(__dirname, '../renderer');
+  if (!cachedRendererRoot) {
+    cachedRendererRoot = resolveRendererRoot({
+      dirname: __dirname,
+      resourcesPath: process.resourcesPath,
+      isPackaged: app.isPackaged,
+      indexExists: existsSync
+    });
+  }
+  return cachedRendererRoot;
 }
 
 function serveRendererFile(filePath: string): Response {
   try {
     const body = readFileSync(filePath);
-    return new Response(body, {
+    // Uint8Array (not Node Buffer alone): some Electron/Windows builds serve an empty
+    // body for Buffer → blank window despite 200 + correct MIME.
+    const bytes = new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+    return new Response(bytes, {
       status: 200,
-      headers: {
-        'Content-Type': mimeTypeForPath(filePath),
-        'Cache-Control': 'no-cache'
-      }
+      headers: rendererResponseHeaders(filePath, bytes.byteLength)
     });
   } catch (err) {
     logError('app-protocol read failed', { filePath, err });
@@ -129,6 +139,7 @@ function createWindow(): void {
   // ready-to-show can hang on some GPU stacks; do not leave the window hidden forever.
   mainWindow.webContents.once('did-finish-load', () => {
     setTimeout(() => showWindow('did-finish-load-fallback'), 500);
+    void verifyRendererMounted();
   });
   setTimeout(() => showWindow('timeout-fallback'), 3000);
 
@@ -162,13 +173,45 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    // Privileged app:// + Node fs + explicit MIME (not loadFile / not net.fetch(file://)).
-    // file:// + asar often fails ES modules on Windows; net.fetch(file) often yields
-    // octet-stream so Chromium refuses type=module. Strip crossorigin at build time.
-    const indexHtml = join(rendererRoot(), 'index.html');
+    // Privileged family-app:// from real unpacked disk path (not asar URL, not net.fetch).
+    const root = rendererRoot();
+    const indexHtml = join(root, 'index.html');
     const url = `${APP_SCHEME}://${APP_HOST}/index.html`;
-    logInfo('loading renderer via app protocol', { url, indexHtml, exists: existsSync(indexHtml) });
+    logInfo('loading renderer via app protocol', {
+      url,
+      root,
+      indexHtml,
+      exists: existsSync(indexHtml),
+      packaged: app.isPackaged,
+      resourcesPath: process.resourcesPath
+    });
     void mainWindow.loadURL(url);
+  }
+}
+
+/** If HTML loaded but the module bundle did not mount React, surface a visible error. */
+async function verifyRendererMounted(): Promise<void> {
+  if (!mainWindow || mainWindow.isDestroyed() || process.env.ELECTRON_RENDERER_URL) {
+    return;
+  }
+  try {
+    await new Promise((r) => setTimeout(r, 1500));
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      return;
+    }
+    const mounted = await mainWindow.webContents.executeJavaScript(
+      `Boolean(document.getElementById('root') && document.getElementById('root').childElementCount > 0)`
+    );
+    if (mounted) {
+      return;
+    }
+    const logPath = getLogFilePath();
+    const root = rendererRoot();
+    logError('renderer root empty after load — UI did not mount', { logPath, root });
+    const page = `<pre style="white-space:pre-wrap;font:14px/1.4 system-ui;padding:24px;color:#1c1917;background:#f4f1eb;min-height:100vh;margin:0">Family Genealogy failed to load the UI.\n\nLog file: ${logPath}\nRenderer root: ${root}\n\nPlease send this screen or the log file with a bug report.</pre>`;
+    await mainWindow.webContents.executeJavaScript(`document.body.innerHTML = ${JSON.stringify(page)}`);
+  } catch (err) {
+    logError('verifyRendererMounted failed', err);
   }
 }
 
@@ -221,9 +264,12 @@ if (!gotLock) {
     protocol.handle(APP_SCHEME, (request) => {
       const url = new URL(request.url);
       const filePath = resolveUnderRoot(rendererRoot(), decodeURIComponent(url.pathname));
-      if (!filePath || !existsSync(filePath)) {
-        logError('app-protocol miss', { requestUrl: request.url, filePath });
+      if (!filePath) {
+        logError('app-protocol miss', { requestUrl: request.url });
         return new Response(null, { status: 404 });
+      }
+      if (url.pathname === '/' || url.pathname.endsWith('.html') || url.pathname.endsWith('.js')) {
+        logInfo('app-protocol serve', { requestUrl: request.url, filePath });
       }
       return serveRendererFile(filePath);
     });

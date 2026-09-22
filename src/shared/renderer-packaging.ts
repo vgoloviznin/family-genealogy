@@ -1,14 +1,14 @@
-import { extname, normalize, resolve, sep } from 'path';
+import { extname, join, normalize, resolve, sep } from 'path';
 
 /**
  * Vite emits `crossorigin` on module scripts/styles. Chromium treats that as a CORS
  * fetch; under Electron `loadFile` (file://, origin "null") the bundle never loads
  * → blank window. Strip at build time (`stripCrossoriginHtmlPlugin`).
  *
- * Production still must not rely on `file://` alone: on Windows (and some Intel Macs)
- * Chromium often fails to execute ES modules from asar over file://. Serve the
- * renderer over a privileged `app://` scheme with Node `fs` + explicit Content-Type
- * (not `net.fetch(file://)`, which often returns octet-stream → ESM refuses to run).
+ * Production must not rely on `file://` into asar: Chromium often cannot run ES
+ * modules from asar paths (Windows especially). Serve over privileged `app://` from
+ * the real on-disk tree (`app.asar.unpacked/out/renderer` when packaged) with Node
+ * `fs` + explicit MIME — never `net.fetch(file://)` for the UI (often octet-stream).
  */
 export function stripCrossoriginAttributes(html: string): string {
   return html.replace(/\s+crossorigin(?:=["'][^"']*["'])?/gi, '');
@@ -36,6 +36,41 @@ const MIME_BY_EXT: Record<string, string> = {
 /** Explicit MIME for protocol Responses — required so Chromium accepts ES modules. */
 export function mimeTypeForPath(filePath: string): string {
   return MIME_BY_EXT[extname(filePath).toLowerCase()] ?? 'application/octet-stream';
+}
+
+/**
+ * Packaged builds unpack the renderer (`asarUnpack: out/renderer/**`). Prefer that
+ * real filesystem path so protocol handlers never depend on asar path rewriting
+ * (unreliable for Chromium / some Windows Electron fs edge cases).
+ */
+export function resolveRendererRoot(options: {
+  dirname: string;
+  resourcesPath: string;
+  isPackaged: boolean;
+  indexExists: (filePath: string) => boolean;
+}): string {
+  const devOrAsarSibling = join(options.dirname, '../renderer');
+  if (!options.isPackaged) {
+    return devOrAsarSibling;
+  }
+
+  const unpacked = join(options.resourcesPath, 'app.asar.unpacked', 'out', 'renderer');
+  if (options.indexExists(join(unpacked, 'index.html'))) {
+    return unpacked;
+  }
+
+  // Legacy / non-unpacked builds: still under app.asar/out/renderer via Electron fs.
+  return devOrAsarSibling;
+}
+
+/** Headers for `app://` Responses (ESM + optional CORS on privileged schemes). */
+export function rendererResponseHeaders(filePath: string, byteLength: number): Record<string, string> {
+  return {
+    'Content-Type': mimeTypeForPath(filePath),
+    'Content-Length': String(byteLength),
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'no-cache'
+  };
 }
 
 /**
