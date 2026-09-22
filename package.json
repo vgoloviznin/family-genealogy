@@ -118,7 +118,8 @@
       "node_modules/better-sqlite3/**",
       "**/node_modules/sharp/**/*",
       "**/node_modules/@img/**/*",
-      "out/renderer/**"
+      "out/renderer/**",
+      "out/preload/**"
     ],
     "mac": {
       "icon": "build/icon.icns",

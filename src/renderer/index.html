@@ -5,9 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="./src/assets/icon.png" />
     <title>Family Genealogy</title>
+    <style>
+      /* Visible without JS — if this stays on screen, the module bundle never ran. */
+      #root {
+        min-height: 100vh;
+        margin: 0;
+        font: 15px/1.45 system-ui, sans-serif;
+        color: #1c1917;
+        background: #f4f1eb;
+      }
+      #boot-status {
+        padding: 48px 24px;
+        max-width: 36rem;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="boot-status">
+        Starting Family Genealogy…
+        <noscript>JavaScript is required.</noscript>
+      </div>
+    </div>
     <script type="module" src="./src/main.tsx"></script>
   </body>
 </html>

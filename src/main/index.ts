@@ -1,4 +1,4 @@
-import { app, BrowserWindow, protocol, net, nativeImage, shell, ipcMain } from 'electron';
+import { app, BrowserWindow, protocol, net, nativeImage, shell, ipcMain, dialog } from 'electron';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
@@ -14,7 +14,7 @@ import { setMenuWindow } from './menu';
 import { IPC_CHANNELS } from '@shared/types';
 import { validateLocale } from '@shared/locales';
 import { resolveRendererRoot, resolveUnderRoot, rendererResponseHeaders } from '@shared/renderer-packaging';
-import { initLogging, logError, logInfo, getLogFilePath } from './utils/log';
+import { initLogging, logError, logInfo, getLogFilePath, readLogTail } from './utils/log';
 
 /**
  * Older / driver-odd GPUs fail to paint Chromium with HW acceleration (blank window).
@@ -64,8 +64,7 @@ protocol.registerSchemesAsPrivileged([
       standard: true,
       secure: true,
       supportFetchAPI: true,
-      corsEnabled: true,
-      stream: true
+      corsEnabled: true
     }
   },
   {
@@ -92,12 +91,24 @@ function rendererRoot(): string {
   return cachedRendererRoot;
 }
 
+/** Prefer real disk path for sandboxed preload (asarUnpack out/preload). */
+function preloadScriptPath(): string {
+  const asarPath = join(__dirname, '../preload/index.js');
+  if (!app.isPackaged) {
+    return asarPath;
+  }
+  const unpacked = asarPath.replace(/app\.asar([/\\])/, 'app.asar.unpacked$1');
+  if (existsSync(unpacked)) {
+    return unpacked;
+  }
+  return asarPath;
+}
+
 function serveRendererFile(filePath: string): Response {
   try {
     const body = readFileSync(filePath);
-    // Uint8Array (not Node Buffer alone): some Electron/Windows builds serve an empty
-    // body for Buffer → blank window despite 200 + correct MIME.
-    const bytes = new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+    // Copy bytes — avoid Buffer pool / empty-body edge cases on Windows Electron.
+    const bytes = Uint8Array.from(body);
     return new Response(bytes, {
       status: 200,
       headers: rendererResponseHeaders(filePath, bytes.byteLength)
@@ -106,6 +117,13 @@ function serveRendererFile(filePath: string): Response {
     logError('app-protocol read failed', { filePath, err });
     return new Response(null, { status: 404 });
   }
+}
+
+function reportUiFailure(title: string, detail: string): void {
+  const logPath = getLogFilePath();
+  const tail = readLogTail(6000);
+  logError(title, { detail, logPath });
+  dialog.showErrorBox(title, `${detail}\n\nLog file:\n${logPath}\n\n--- log tail ---\n${tail || '(empty)'}`);
 }
 
 function createWindow(): void {
@@ -118,7 +136,7 @@ function createWindow(): void {
     backgroundColor: '#f4f1eb',
     icon: getAppIcon(),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: preloadScriptPath(),
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false
@@ -146,6 +164,7 @@ function createWindow(): void {
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
     logError('did-fail-load', { code, desc, url });
     showWindow('did-fail-load');
+    reportUiFailure('Family Genealogy failed to load', `did-fail-load code=${code}\n${desc}\n${url}`);
   });
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     logError('render-process-gone', details);
@@ -189,29 +208,47 @@ function createWindow(): void {
   }
 }
 
-/** If HTML loaded but the module bundle did not mount React, surface a visible error. */
+/** True only when React reached the ready UI — not the cream spinner / static boot text. */
 async function verifyRendererMounted(): Promise<void> {
   if (!mainWindow || mainWindow.isDestroyed() || process.env.ELECTRON_RENDERER_URL) {
     return;
   }
   try {
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 3500));
     if (!mainWindow || mainWindow.isDestroyed()) {
       return;
     }
-    const mounted = await mainWindow.webContents.executeJavaScript(
-      `Boolean(document.getElementById('root') && document.getElementById('root').childElementCount > 0)`
-    );
-    if (mounted) {
+    const state = (await mainWindow.webContents.executeJavaScript(`({
+      href: location.href,
+      hasApi: typeof window.api !== 'undefined',
+      appReady: Boolean(document.querySelector('[data-app-ready]')),
+      stillBooting: Boolean(document.querySelector('[data-boot="loading"], #boot-status')),
+      rootText: (document.getElementById('root')?.innerText || '').slice(0, 240)
+    })`)) as {
+      href: string;
+      hasApi: boolean;
+      appReady: boolean;
+      stillBooting: boolean;
+      rootText: string;
+    };
+    logInfo('renderer boot check', state);
+    if (state.appReady && state.hasApi) {
       return;
     }
-    const logPath = getLogFilePath();
-    const root = rendererRoot();
-    logError('renderer root empty after load — UI did not mount', { logPath, root });
-    const page = `<pre style="white-space:pre-wrap;font:14px/1.4 system-ui;padding:24px;color:#1c1917;background:#f4f1eb;min-height:100vh;margin:0">Family Genealogy failed to load the UI.\n\nLog file: ${logPath}\nRenderer root: ${root}\n\nPlease send this screen or the log file with a bug report.</pre>`;
-    await mainWindow.webContents.executeJavaScript(`document.body.innerHTML = ${JSON.stringify(page)}`);
+    reportUiFailure(
+      'Family Genealogy UI did not start',
+      [
+        `URL: ${state.href}`,
+        `window.api: ${state.hasApi}`,
+        `app ready: ${state.appReady}`,
+        `still booting: ${state.stillBooting}`,
+        `root text: ${state.rootText || '(empty)'}`,
+        `renderer root: ${rendererRoot()}`
+      ].join('\n')
+    );
   } catch (err) {
     logError('verifyRendererMounted failed', err);
+    reportUiFailure('Family Genealogy UI check failed', err instanceof Error ? err.message : String(err));
   }
 }
 

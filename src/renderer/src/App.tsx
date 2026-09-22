@@ -82,15 +82,25 @@ export default function App() {
 
   if (!ready) {
     return (
-      <div className="min-h-screen bg-[#f4f1eb] flex items-center justify-center" aria-busy="true">
-        <div className="w-8 h-8 border-2 border-stone-300 border-t-stone-600 rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#f4f1eb] flex flex-col items-center justify-center gap-3 text-stone-800" aria-busy="true" data-boot="loading">
+        <div className="w-8 h-8 border-2 border-stone-400 border-t-stone-800 rounded-full animate-spin" />
+        <p className="text-sm font-medium">{t('loading')}</p>
+      </div>
+    );
+  }
+
+  if (typeof window.api === 'undefined') {
+    return (
+      <div className="min-h-screen bg-[#f4f1eb] p-8 text-stone-900 font-sans text-sm leading-relaxed" data-boot="no-api">
+        <p className="font-semibold text-base">Family Genealogy failed to connect to the app process.</p>
+        <p className="mt-2">window.api is missing (preload). Please send the log file from the error dialog.</p>
       </div>
     );
   }
 
   if (!session.project) {
     return (
-      <>
+      <div data-app-ready="true">
         <WelcomeScreen
           locale={locale}
           onLocaleChange={(next) => {
@@ -119,14 +129,14 @@ export default function App() {
           }}
         />
         <Toast toast={toast} />
-      </>
+      </div>
     );
   }
 
   const project = session.project;
 
   return (
-    <div className="h-screen flex flex-col bg-[#f4f1eb]">
+    <div className="h-screen flex flex-col bg-[#f4f1eb]" data-app-ready="true">
       <ProjectHeader
         projectName={project.name}
         cloudWarning={project.cloudWarning}
