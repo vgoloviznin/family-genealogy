@@ -45,7 +45,7 @@ tests/        — unit-тесты (зеркало src/ + helpers, setup)
 ## Соглашения
 
 1. **Минимальный diff** — не рефакторить и не добавлять лишнее без запроса.
-2. **Упакованный UI** — Vite не должен оставлять `crossorigin` на ассетах renderer; в production загрузка через `family-app://` (не сырой `file://`). `npm run build` проверяет это (`scripts/assert-renderer-packaging.mjs`).
+2. **Упакованный UI** — Vite не должен оставлять `crossorigin` на ассетах renderer (`scripts/assert-renderer-packaging.mjs`). В production — `BrowserWindow.loadFile` + `base: './'`. Не раздавать UI через custom scheme + `net.fetch(file://)` без `bypassCustomProtocolHandlers: true` — на Windows/asar это даёт пустое окно.
 3. **IPC** — новые методы: тип в `src/shared/types.ts`, handler в `src/main/ipc/register.ts`, preload в `src/preload/index.ts`.
 4. **Схема БД** — правки в `schema.ts` + миграции в `src/main/db/migrations.ts` (`schema_migrations`); при смене версии — `SCHEMA_VERSION` и обновление `project.json` только после успешного `runMigrations`. Более новую схему отвергать.
 5. **Мягкое удаление** — `deletedAt` для people, events, associations, media, sources, citations.
