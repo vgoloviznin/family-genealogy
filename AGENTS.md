@@ -45,7 +45,7 @@ tests/        unit tests (mirrors src/ + helpers, setup)
 ## Conventions
 
 1. **Minimal diff** — no drive-by refactors or extras.
-2. **Packaged UI** — Vite must not emit `crossorigin` on renderer assets; production loads via `family-app://` (not raw `file://`). `npm run build` asserts this (`scripts/assert-renderer-packaging.mjs`).
+2. **Packaged UI** — Vite must not emit `crossorigin` on renderer assets (`scripts/assert-renderer-packaging.mjs`). Production loads via `BrowserWindow.loadFile` + `base: './'` (electron-vite default). Do not serve the UI over a custom scheme with `net.fetch(file://)` unless `bypassCustomProtocolHandlers: true` is set — that path breaks on Windows/asar.
 3. **IPC** — new methods: type in `src/shared/types.ts`, handler in `src/main/ipc/register.ts`, preload in `src/preload/index.ts`.
 4. **DB schema** — edit `schema.ts` + migrations in `src/main/db/migrations.ts` (`schema_migrations`); bump `SCHEMA_VERSION` and update `project.json` only after successful `runMigrations`. Reject newer schemas.
 5. **Soft delete** — `deletedAt` for people, events, associations, media, sources, citations.

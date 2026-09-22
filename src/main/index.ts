@@ -1,4 +1,5 @@
 import { app, BrowserWindow, protocol, net, nativeImage, shell, ipcMain } from 'electron';
+import { existsSync } from 'fs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
 import iconPng from '../../resources/icon.png?asset';
@@ -12,15 +13,12 @@ import { applyAppLocale } from './locale';
 import { setMenuWindow } from './menu';
 import { IPC_CHANNELS } from '@shared/types';
 import { validateLocale } from '@shared/locales';
-import { resolveAppProtocolPath } from '@shared/renderer-packaging';
 import { initLogging, logError, logInfo } from './utils/log';
 
 /** Older Intel GPUs often fail to paint Chromium with HW acceleration (blank window). */
 if (process.platform === 'darwin' && process.arch === 'x64') {
   app.disableHardwareAcceleration();
 }
-
-const APP_SCHEME = 'family-app';
 
 let mainWindow: BrowserWindow | null = null;
 let cachedAppIcon: Electron.NativeImage | null = null;
@@ -50,21 +48,7 @@ function setDockIcon(): void {
   }
 }
 
-function getRendererRoot(): string {
-  return join(__dirname, '../renderer');
-}
-
 protocol.registerSchemesAsPrivileged([
-  {
-    scheme: APP_SCHEME,
-    privileges: {
-      standard: true,
-      secure: true,
-      supportFetchAPI: true,
-      corsEnabled: true,
-      stream: true
-    }
-  },
   {
     scheme: 'family-media',
     privileges: {
@@ -76,17 +60,6 @@ protocol.registerSchemesAsPrivileged([
     }
   }
 ]);
-
-function registerAppProtocol(): void {
-  const root = getRendererRoot();
-  protocol.handle(APP_SCHEME, (request) => {
-    const filePath = resolveAppProtocolPath(root, request.url);
-    if (!filePath) {
-      return new Response(null, { status: 404 });
-    }
-    return net.fetch(pathToFileURL(filePath).href);
-  });
-}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -116,11 +89,11 @@ function createWindow(): void {
   };
 
   mainWindow.on('ready-to-show', () => showWindow('ready-to-show'));
-  // ready-to-show can hang on some Intel Mac GPU stacks; do not leave the window hidden forever.
+  // ready-to-show can hang on some GPU stacks; do not leave the window hidden forever.
   mainWindow.webContents.once('did-finish-load', () => {
-    setTimeout(() => showWindow('did-finish-load-fallback'), 1500);
+    setTimeout(() => showWindow('did-finish-load-fallback'), 500);
   });
-  setTimeout(() => showWindow('timeout-fallback'), 5000);
+  setTimeout(() => showWindow('timeout-fallback'), 3000);
 
   mainWindow.webContents.on('did-fail-load', (_e, code, desc, url) => {
     logError('did-fail-load', { code, desc, url });
@@ -152,9 +125,12 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    // Custom scheme gives a real origin so Vite module scripts (and CORS) work.
-    // loadFile(file://) + crossorigin = blank UI on macOS and Windows.
-    void mainWindow.loadURL(`${APP_SCHEME}://localhost/index.html`);
+    // electron-vite standard: loadFile + relative assets (base './') + no crossorigin
+    // (asserted by scripts/assert-renderer-packaging.mjs). Custom app:// + net.fetch(file)
+    // without bypassCustomProtocolHandlers fails on Windows/asar → blank window.
+    const indexHtml = join(__dirname, '../renderer/index.html');
+    logInfo('loading renderer via loadFile', { indexHtml, exists: existsSync(indexHtml) });
+    void mainWindow.loadFile(indexHtml);
   }
 }
 
@@ -204,8 +180,6 @@ if (!gotLock) {
       logError('unhandledRejection', reason);
     });
 
-    registerAppProtocol();
-
     protocol.handle('family-media', (request) => {
       const url = new URL(request.url);
       const relative = decodeURIComponent(url.pathname.slice(1));
@@ -213,7 +187,9 @@ if (!gotLock) {
       if (!filePath) {
         return new Response(null, { status: 404 });
       }
-      return net.fetch(pathToFileURL(filePath).toString());
+      // Required on Windows: otherwise net.fetch(file://) can fail / recurse through handlers.
+      // https://github.com/electron/electron/issues/49073
+      return net.fetch(pathToFileURL(filePath).href, { bypassCustomProtocolHandlers: true });
     });
 
     registerIpcHandlers();
