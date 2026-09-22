@@ -45,7 +45,7 @@ tests/        unit tests (mirrors src/ + helpers, setup)
 ## Conventions
 
 1. **Minimal diff** — no drive-by refactors or extras.
-2. **Packaged UI** — Vite must not emit `crossorigin` on renderer assets (`scripts/assert-renderer-packaging.mjs`) and uses `base: './'`. Production loads via privileged `app://localhost/…` served with Node `fs` + explicit MIME (`mimeTypeForPath`) — not `loadFile` / `file://` (ES modules from asar often blank on Windows) and not `net.fetch(file://)` (often `octet-stream` → ESM refused). Renderer is also `asarUnpack`’d. `family-media` may use `net.fetch` only with `bypassCustomProtocolHandlers: true`.
+2. **Packaged UI** — Vite must not emit `crossorigin` on renderer assets (`scripts/assert-renderer-packaging.mjs`) and uses `base: './'`. Production loads via privileged `family-app://localhost/…` served from the real on-disk tree (`app.asar.unpacked/out/renderer` when packaged) with Node `fs` + explicit MIME (`mimeTypeForPath`) — not `loadFile` / `file://` into asar and not `net.fetch(file://)`. Renderer is `asarUnpack`’d. `family-media` may use `net.fetch` only with `bypassCustomProtocolHandlers: true`.
 3. **IPC** — new methods: type in `src/shared/types.ts`, handler in `src/main/ipc/register.ts`, preload in `src/preload/index.ts`.
 4. **DB schema** — edit `schema.ts` + migrations in `src/main/db/migrations.ts` (`schema_migrations`); bump `SCHEMA_VERSION` and update `project.json` only after successful `runMigrations`. Reject newer schemas.
 5. **Soft delete** — `deletedAt` for people, events, associations, media, sources, citations.

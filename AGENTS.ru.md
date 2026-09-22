@@ -45,7 +45,7 @@ tests/        — unit-тесты (зеркало src/ + helpers, setup)
 ## Соглашения
 
 1. **Минимальный diff** — не рефакторить и не добавлять лишнее без запроса.
-2. **Упакованный UI** — Vite не должен оставлять `crossorigin` на ассетах renderer (`scripts/assert-renderer-packaging.mjs`), `base: './'`. В production — привилегированный `app://localhost/…` через Node `fs` + явный MIME (`mimeTypeForPath`), не `loadFile`/`file://` (ES-модули из asar часто дают пустое окно на Windows) и не `net.fetch(file://)` (часто `octet-stream` → ESM не принимается). Renderer также в `asarUnpack`. Для `family-media` `net.fetch` только с `bypassCustomProtocolHandlers: true`.
+2. **Упакованный UI** — Vite не должен оставлять `crossorigin` на ассетах renderer (`scripts/assert-renderer-packaging.mjs`), `base: './'`. В production — привилегированный `family-app://localhost/…` с реального диска (`app.asar.unpacked/out/renderer` при упаковке) через Node `fs` + явный MIME (`mimeTypeForPath`), не `loadFile`/`file://` внутрь asar и не `net.fetch(file://)`. Renderer в `asarUnpack`. Для `family-media` `net.fetch` только с `bypassCustomProtocolHandlers: true`.
 3. **IPC** — новые методы: тип в `src/shared/types.ts`, handler в `src/main/ipc/register.ts`, preload в `src/preload/index.ts`.
 4. **Схема БД** — правки в `schema.ts` + миграции в `src/main/db/migrations.ts` (`schema_migrations`); при смене версии — `SCHEMA_VERSION` и обновление `project.json` только после успешного `runMigrations`. Более новую схему отвергать.
 5. **Мягкое удаление** — `deletedAt` для people, events, associations, media, sources, citations.
