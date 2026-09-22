@@ -12,12 +12,15 @@ import { applyAppLocale } from './locale';
 import { setMenuWindow } from './menu';
 import { IPC_CHANNELS } from '@shared/types';
 import { validateLocale } from '@shared/locales';
+import { resolveAppProtocolPath } from '@shared/renderer-packaging';
 import { initLogging, logError, logInfo } from './utils/log';
 
 /** Older Intel GPUs often fail to paint Chromium with HW acceleration (blank window). */
 if (process.platform === 'darwin' && process.arch === 'x64') {
   app.disableHardwareAcceleration();
 }
+
+const APP_SCHEME = 'family-app';
 
 let mainWindow: BrowserWindow | null = null;
 let cachedAppIcon: Electron.NativeImage | null = null;
@@ -47,7 +50,21 @@ function setDockIcon(): void {
   }
 }
 
+function getRendererRoot(): string {
+  return join(__dirname, '../renderer');
+}
+
 protocol.registerSchemesAsPrivileged([
+  {
+    scheme: APP_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true
+    }
+  },
   {
     scheme: 'family-media',
     privileges: {
@@ -59,6 +76,17 @@ protocol.registerSchemesAsPrivileged([
     }
   }
 ]);
+
+function registerAppProtocol(): void {
+  const root = getRendererRoot();
+  protocol.handle(APP_SCHEME, (request) => {
+    const filePath = resolveAppProtocolPath(root, request.url);
+    if (!filePath) {
+      return new Response(null, { status: 404 });
+    }
+    return net.fetch(pathToFileURL(filePath).href);
+  });
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -101,6 +129,16 @@ function createWindow(): void {
   mainWindow.webContents.on('render-process-gone', (_e, details) => {
     logError('render-process-gone', details);
   });
+  mainWindow.webContents.on('console-message', (event) => {
+    if (event.level === 'warning' || event.level === 'error') {
+      logError('renderer-console', {
+        level: event.level,
+        message: event.message,
+        line: event.lineNumber,
+        sourceId: event.sourceId
+      });
+    }
+  });
 
   setMenuWindow(mainWindow);
 
@@ -114,7 +152,9 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+    // Custom scheme gives a real origin so Vite module scripts (and CORS) work.
+    // loadFile(file://) + crossorigin = blank UI on macOS and Windows.
+    void mainWindow.loadURL(`${APP_SCHEME}://localhost/index.html`);
   }
 }
 
@@ -163,6 +203,8 @@ if (!gotLock) {
     process.on('unhandledRejection', (reason) => {
       logError('unhandledRejection', reason);
     });
+
+    registerAppProtocol();
 
     protocol.handle('family-media', (request) => {
       const url = new URL(request.url);

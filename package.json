@@ -27,7 +27,7 @@
   ],
   "scripts": {
     "dev": "node scripts/electron-vite.mjs dev",
-    "build": "electron-vite build",
+    "build": "electron-vite build && node scripts/assert-renderer-packaging.mjs",
     "preview": "node scripts/electron-vite.mjs preview",
     "postinstall": "electron-builder install-app-deps && node node_modules/electron/install.js",
     "rebuild": "electron-rebuild -f -w better-sqlite3",

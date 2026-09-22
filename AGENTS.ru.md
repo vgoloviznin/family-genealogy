@@ -45,11 +45,12 @@ tests/        — unit-тесты (зеркало src/ + helpers, setup)
 ## Соглашения
 
 1. **Минимальный diff** — не рефакторить и не добавлять лишнее без запроса.
-2. **IPC** — новые методы: тип в `src/shared/types.ts`, handler в `src/main/ipc/register.ts`, preload в `src/preload/index.ts`.
-3. **Схема БД** — правки в `schema.ts` + миграции в `src/main/db/migrations.ts` (`schema_migrations`); при смене версии — `SCHEMA_VERSION` и обновление `project.json` только после успешного `runMigrations`. Более новую схему отвергать.
-4. **Мягкое удаление** — `deletedAt` для people, events, associations, media, sources, citations.
-5. **Обмен данными** — только через `.fgtree`, не синхронизировать живой SQLite через облако (iCloud/Dropbox и т.п. для папки проекта — предупреждение в UI).
-6. **Язык UI** — ru (по умолчанию), en, it; выбор на экране приветствия и в настройках. Новые строки — только через ключи в `src/shared/locales/`.
+2. **Упакованный UI** — Vite не должен оставлять `crossorigin` на ассетах renderer; в production загрузка через `family-app://` (не сырой `file://`). `npm run build` проверяет это (`scripts/assert-renderer-packaging.mjs`).
+3. **IPC** — новые методы: тип в `src/shared/types.ts`, handler в `src/main/ipc/register.ts`, preload в `src/preload/index.ts`.
+4. **Схема БД** — правки в `schema.ts` + миграции в `src/main/db/migrations.ts` (`schema_migrations`); при смене версии — `SCHEMA_VERSION` и обновление `project.json` только после успешного `runMigrations`. Более новую схему отвергать.
+5. **Мягкое удаление** — `deletedAt` для people, events, associations, media, sources, citations.
+6. **Обмен данными** — только через `.fgtree`, не синхронизировать живой SQLite через облако (iCloud/Dropbox и т.п. для папки проекта — предупреждение в UI).
+7. **Язык UI** — ru (по умолчанию), en, it; выбор на экране приветствия и в настройках. Новые строки — только через ключи в `src/shared/locales/`.
    - **Renderer**: `react-i18next` (`src/renderer/src/i18n.ts`), компоненты — `useTranslation()` / `t('key')`.
    - **Main / shared без React**: `translate(locale, key)` из `@shared/locales`; в main — `localizedError(key)` / `t(getAppLocale(), key)` из `src/main/i18n.ts`. При старте и смене языка: `initAppLocale` / `applyAppLocale` (меню).
    - **IPC**: смена языка в renderer вызывает `window.api.settings.set({ locale })` → `applyAppLocale` в main.
@@ -58,7 +59,7 @@ tests/        — unit-тесты (зеркало src/ + helpers, setup)
    - **Тесты**: `tests/helpers/localized-error.ts` → `localizedErrorMessage('errors.*')`, не русский текст в `toThrow`.
    - **Пример ошибки в сервисе**: `throw new Error(localizedError('errors.personNotFound'));`
    - **Пример в `@shared`**: `throw new Error(translate(locale, 'errors.invalidArchiveFormat'));` — `locale` из `getAppLocale()` в main.
-7. **Не добавлять без запроса**: GEDCOM, полнотекстовый поиск, **автоматическое слияние дубликатов людей** (один человек — два UUID).
+8. **Не добавлять без запроса**: GEDCOM, полнотекстовый поиск, **автоматическое слияние дубликатов людей** (один человек — два UUID).
 
 ## Синхронизация проектов (`.fgtree` merge)
 
