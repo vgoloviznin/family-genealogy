@@ -1,5 +1,5 @@
 import { app, BrowserWindow, protocol, net, nativeImage, shell, ipcMain } from 'electron';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { pathToFileURL } from 'url';
 import iconPng from '../../resources/icon.png?asset';
@@ -13,12 +13,19 @@ import { applyAppLocale } from './locale';
 import { setMenuWindow } from './menu';
 import { IPC_CHANNELS } from '@shared/types';
 import { validateLocale } from '@shared/locales';
+import { mimeTypeForPath, resolveUnderRoot } from '@shared/renderer-packaging';
 import { initLogging, logError, logInfo } from './utils/log';
 
-/** Older Intel GPUs often fail to paint Chromium with HW acceleration (blank window). */
-if (process.platform === 'darwin' && process.arch === 'x64') {
+/**
+ * Older / driver-odd GPUs fail to paint Chromium with HW acceleration (blank window).
+ * Darwin x64 (Intel Mac) and Windows are the known cases for this app.
+ */
+if ((process.platform === 'darwin' && process.arch === 'x64') || process.platform === 'win32') {
   app.disableHardwareAcceleration();
 }
+
+const APP_SCHEME = 'app';
+const APP_HOST = 'localhost';
 
 let mainWindow: BrowserWindow | null = null;
 let cachedAppIcon: Electron.NativeImage | null = null;
@@ -50,6 +57,16 @@ function setDockIcon(): void {
 
 protocol.registerSchemesAsPrivileged([
   {
+    scheme: APP_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true
+    }
+  },
+  {
     scheme: 'family-media',
     privileges: {
       standard: true,
@@ -60,6 +77,26 @@ protocol.registerSchemesAsPrivileged([
     }
   }
 ]);
+
+function rendererRoot(): string {
+  return join(__dirname, '../renderer');
+}
+
+function serveRendererFile(filePath: string): Response {
+  try {
+    const body = readFileSync(filePath);
+    return new Response(body, {
+      status: 200,
+      headers: {
+        'Content-Type': mimeTypeForPath(filePath),
+        'Cache-Control': 'no-cache'
+      }
+    });
+  } catch (err) {
+    logError('app-protocol read failed', { filePath, err });
+    return new Response(null, { status: 404 });
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -125,12 +162,13 @@ function createWindow(): void {
   if (process.env.ELECTRON_RENDERER_URL) {
     void mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
-    // electron-vite standard: loadFile + relative assets (base './') + no crossorigin
-    // (asserted by scripts/assert-renderer-packaging.mjs). Custom app:// + net.fetch(file)
-    // without bypassCustomProtocolHandlers fails on Windows/asar → blank window.
-    const indexHtml = join(__dirname, '../renderer/index.html');
-    logInfo('loading renderer via loadFile', { indexHtml, exists: existsSync(indexHtml) });
-    void mainWindow.loadFile(indexHtml);
+    // Privileged app:// + Node fs + explicit MIME (not loadFile / not net.fetch(file://)).
+    // file:// + asar often fails ES modules on Windows; net.fetch(file) often yields
+    // octet-stream so Chromium refuses type=module. Strip crossorigin at build time.
+    const indexHtml = join(rendererRoot(), 'index.html');
+    const url = `${APP_SCHEME}://${APP_HOST}/index.html`;
+    logInfo('loading renderer via app protocol', { url, indexHtml, exists: existsSync(indexHtml) });
+    void mainWindow.loadURL(url);
   }
 }
 
@@ -178,6 +216,16 @@ if (!gotLock) {
     });
     process.on('unhandledRejection', (reason) => {
       logError('unhandledRejection', reason);
+    });
+
+    protocol.handle(APP_SCHEME, (request) => {
+      const url = new URL(request.url);
+      const filePath = resolveUnderRoot(rendererRoot(), decodeURIComponent(url.pathname));
+      if (!filePath || !existsSync(filePath)) {
+        logError('app-protocol miss', { requestUrl: request.url, filePath });
+        return new Response(null, { status: 404 });
+      }
+      return serveRendererFile(filePath);
     });
 
     protocol.handle('family-media', (request) => {

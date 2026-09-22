@@ -1,6 +1,6 @@
 import { resolve } from 'path';
 import { describe, expect, it } from 'vitest';
-import { resolveUnderRoot, stripCrossoriginAttributes } from '@shared/renderer-packaging';
+import { mimeTypeForPath, resolveUnderRoot, stripCrossoriginAttributes } from '@shared/renderer-packaging';
 
 describe('stripCrossoriginAttributes', () => {
   it('removes bare and valued crossorigin attributes', () => {
@@ -14,6 +14,21 @@ describe('stripCrossoriginAttributes', () => {
   it('is a no-op when crossorigin is absent', () => {
     const html = '<script type="module" src="./assets/a.js"></script>';
     expect(stripCrossoriginAttributes(html)).toBe(html);
+  });
+});
+
+describe('mimeTypeForPath', () => {
+  it('returns javascript MIME for ES module assets', () => {
+    expect(mimeTypeForPath('/out/renderer/assets/index-abc.js')).toBe('text/javascript; charset=utf-8');
+  });
+
+  it('returns html and css MIME types', () => {
+    expect(mimeTypeForPath('/out/renderer/index.html')).toBe('text/html; charset=utf-8');
+    expect(mimeTypeForPath('/out/renderer/assets/index.css')).toBe('text/css; charset=utf-8');
+  });
+
+  it('falls back to octet-stream for unknown extensions', () => {
+    expect(mimeTypeForPath('/out/renderer/assets/x.bin')).toBe('application/octet-stream');
   });
 });
 
