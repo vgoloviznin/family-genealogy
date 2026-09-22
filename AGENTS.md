@@ -45,11 +45,12 @@ tests/        unit tests (mirrors src/ + helpers, setup)
 ## Conventions
 
 1. **Minimal diff** — no drive-by refactors or extras.
-2. **IPC** — new methods: type in `src/shared/types.ts`, handler in `src/main/ipc/register.ts`, preload in `src/preload/index.ts`.
-3. **DB schema** — edit `schema.ts` + migrations in `src/main/db/migrations.ts` (`schema_migrations`); bump `SCHEMA_VERSION` and update `project.json` only after successful `runMigrations`. Reject newer schemas.
-4. **Soft delete** — `deletedAt` for people, events, associations, media, sources, citations.
-5. **Data exchange** — only via `.fgtree`; never sync a live SQLite folder through iCloud/Dropbox/etc. (UI warns).
-6. **UI i18n** — ru (default), en, it. New strings **only** via keys in `src/shared/locales/`.
+2. **Packaged UI** — Vite must not emit `crossorigin` on renderer assets; production loads via `family-app://` (not raw `file://`). `npm run build` asserts this (`scripts/assert-renderer-packaging.mjs`).
+3. **IPC** — new methods: type in `src/shared/types.ts`, handler in `src/main/ipc/register.ts`, preload in `src/preload/index.ts`.
+4. **DB schema** — edit `schema.ts` + migrations in `src/main/db/migrations.ts` (`schema_migrations`); bump `SCHEMA_VERSION` and update `project.json` only after successful `runMigrations`. Reject newer schemas.
+5. **Soft delete** — `deletedAt` for people, events, associations, media, sources, citations.
+6. **Data exchange** — only via `.fgtree`; never sync a live SQLite folder through iCloud/Dropbox/etc. (UI warns).
+7. **UI i18n** — ru (default), en, it. New strings **only** via keys in `src/shared/locales/`.
    - **Renderer**: `react-i18next` (`src/renderer/src/i18n.ts`), `useTranslation()` / `t('key')`.
    - **Main / shared without React**: `translate(locale, key)` from `@shared/locales`; in main — `localizedError(key)` / `t(getAppLocale(), key)` from `src/main/i18n.ts`. Startup / locale change: `initAppLocale` / `applyAppLocale` (menus).
    - **IPC**: renderer `window.api.settings.set({ locale })` → `applyAppLocale` in main.
@@ -58,7 +59,7 @@ tests/        unit tests (mirrors src/ + helpers, setup)
    - **Tests**: `tests/helpers/localized-error.ts` → `localizedErrorMessage('errors.*')`; do not assert raw Russian in `toThrow`.
    - Service example: `throw new Error(localizedError('errors.personNotFound'));`
    - `@shared` example: `throw new Error(translate(locale, 'errors.invalidArchiveFormat'));`
-7. **Do not add without an explicit request**: GEDCOM, full-text search, **automatic person dedupe** (one person — two UUIDs).
+8. **Do not add without an explicit request**: GEDCOM, full-text search, **automatic person dedupe** (one person — two UUIDs).
 
 ## Project sync (`.fgtree` merge)
 
