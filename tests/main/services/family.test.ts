@@ -13,8 +13,11 @@ import {
   addSibling,
   dissolveUnion,
   getFamiliesForPerson,
+  linkExistingChild,
+  linkExistingParent,
   linkExistingPartner,
   linkExistingSibling,
+  linkPartnerToFamily,
   setUnionType,
   unlinkChild,
   unlinkPartner
@@ -243,6 +246,41 @@ describe.skipIf(!isSqliteAvailable())('family service', () => {
       const after = await getFamiliesForPerson(person.id);
       const withChild = after.find((f) => f.children.some((c) => c.person.id === child.id));
       expect(withChild?.id).toBe(target);
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('rejects a second union of the same spouses', async () => {
+    const project = createTestProjectDir();
+    try {
+      const person = await createPerson({ firstName: 'Ann', lastName: 'A' });
+      const spouse = await createPerson({ firstName: 'Ben', lastName: 'B' });
+      await linkExistingPartner(person.id, spouse.id);
+      const extra = await addChildToPerson(person.id, { firstName: 'Skip', lastName: 'S' }, 'birth', 'new');
+      const solo = (await getFamiliesForPerson(person.id)).find((family) => family.children.some((child) => child.person.id === extra.id));
+      await unlinkChild(solo!.id, extra.id);
+
+      await expect(linkPartnerToFamily(solo!.id, spouse.id)).rejects.toThrow(localizedErrorMessage('errors.alreadySpouses'));
+    } finally {
+      project.cleanup();
+    }
+  });
+
+  it('rejects linking a child who already has that parent', async () => {
+    const project = createTestProjectDir();
+    try {
+      const mother = await createPerson({ firstName: 'Mother', lastName: 'M' });
+      const father = await createPerson({ firstName: 'Father', lastName: 'F' });
+      const child = await createPerson({ firstName: 'Child', lastName: 'C' });
+      await linkExistingPartner(mother.id, father.id);
+      await linkExistingChild(mother.id, child.id);
+
+      const other = await addChildToPerson(mother.id, { firstName: 'Other', lastName: 'O' }, 'birth', 'new');
+      const solo = (await getFamiliesForPerson(mother.id)).find((family) => family.children.some((row) => row.person.id === other.id));
+
+      await expect(linkExistingChild(mother.id, child.id, 'birth', solo!.id)).rejects.toThrow(localizedErrorMessage('errors.alreadyParentChild'));
+      await expect(linkExistingParent(child.id, mother.id)).rejects.toThrow(localizedErrorMessage('errors.alreadyParent'));
     } finally {
       project.cleanup();
     }

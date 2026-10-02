@@ -10,7 +10,7 @@ import * as schema from '@main/db/schema';
 import { SCHEMA_VERSION } from '@main/db/schema';
 import { closeProject } from '@main/services/project';
 import { createPerson, listPeople, updatePerson, deletePerson } from '@main/services/people';
-import { addChildToPerson, getFamiliesForPerson } from '@main/services/family';
+import { addChildToPerson, getFamiliesForPerson, linkExistingChild, linkExistingPartner } from '@main/services/family';
 import { upsertEventRecord, upsertPlaceByName } from '@main/services/people';
 import type { MergeApplyResult } from '@shared/merge-types';
 import { mergeIncomingDatabase, type MergeDatabasePreview } from '@main/services/merge';
@@ -902,6 +902,65 @@ describe.skipIf(!isSqliteAvailable())('mergeIncomingDatabase', () => {
         expect(link.media_id).toBe(mediaId);
         expect(link.person_id).toBe(person.id);
         expect(link.deleted_at).toBeNull();
+      } finally {
+        fork.cleanup();
+      }
+    } finally {
+      local.cleanup();
+    }
+  });
+
+  it('drops a remote union that repeats the same partners and child', async () => {
+    const local = createTestProjectDir();
+    try {
+      const mother = await createPerson({ firstName: 'Mother', lastName: 'One' });
+      const father = await createPerson({ firstName: 'Father', lastName: 'One' });
+      const child = await createPerson({ firstName: 'Child', lastName: 'One' });
+      await linkExistingPartner(mother.id, father.id);
+      await linkExistingChild(mother.id, child.id);
+      const [kept] = await getFamiliesForPerson(mother.id);
+
+      const fork = createForkedTestProject(local.path);
+      try {
+        const duplicateId = newId();
+        const ts = '2099-01-01T00:00:00.000Z';
+        withForkDb(fork.path, (db) => {
+          db.prepare(`INSERT INTO families (id, union_type, created_at, updated_at) VALUES (?, 'marriage', ?, ?)`).run(duplicateId, ts, ts);
+          db.prepare(`INSERT INTO family_partners (id, family_id, person_id, sort_order, created_at, updated_at) VALUES (?, ?, ?, 0, ?, ?)`).run(
+            newId(),
+            duplicateId,
+            mother.id,
+            ts,
+            ts
+          );
+          db.prepare(`INSERT INTO family_partners (id, family_id, person_id, sort_order, created_at, updated_at) VALUES (?, ?, ?, 1, ?, ?)`).run(
+            newId(),
+            duplicateId,
+            father.id,
+            ts,
+            ts
+          );
+          db.prepare(`INSERT INTO family_children (id, family_id, person_id, pedigree, created_at, updated_at) VALUES (?, ?, ?, 'birth', ?, ?)`).run(
+            newId(),
+            duplicateId,
+            child.id,
+            ts,
+            ts
+          );
+        });
+
+        await mergeIncomingDatabase({
+          localProjectPath: local.path,
+          incomingProjectPath: fork.path,
+          mode: 'apply'
+        });
+
+        const families = await getFamiliesForPerson(mother.id);
+        expect(families.map((family) => family.id)).toEqual([kept.id]);
+        expect(families[0]?.children.map((row) => row.person.id)).toEqual([child.id]);
+
+        const dropped = getSqlite().prepare('SELECT deleted_at FROM families WHERE id = ?').get(duplicateId) as { deleted_at: string | null };
+        expect(dropped.deleted_at).toBeTruthy();
       } finally {
         fork.cleanup();
       }

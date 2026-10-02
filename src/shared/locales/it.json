@@ -452,6 +452,7 @@
     "alreadyParent": "Questa persona è già indicata come genitore",
     "alreadyInUnion": "La persona è già in questa unione",
     "alreadyChildInUnion": "Questa persona è già figlio nell'unione",
+    "alreadyParentChild": "Questo legame genitore-figlio esiste già",
     "familyLinkNotFound": "Legame familiare non trovato",
     "notInUnion": "La persona non è in questa unione",
     "cannotDissolveWithChildren": "Impossibile eliminare un'unione con figli",
