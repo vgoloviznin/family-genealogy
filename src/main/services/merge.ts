@@ -408,11 +408,7 @@ function planOrCopyMediaFiles(input: {
   return { mediaCopied, mediaSkipped, pathUpdates, thumbUpdates };
 }
 
-function applyMediaPathUpdates(
-  sqlite: Database.Database,
-  pathUpdates: Map<string, string>,
-  thumbUpdates: Map<string, string>
-): void {
+function applyMediaPathUpdates(sqlite: Database.Database, pathUpdates: Map<string, string>, thumbUpdates: Map<string, string>): void {
   if (pathUpdates.size > 0) {
     const stmt = sqlite.prepare('UPDATE media_assets SET relative_path = ? WHERE id = ?');
     for (const [id, relativePath] of pathUpdates) {
