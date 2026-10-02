@@ -584,6 +584,108 @@ describe.skipIf(!isSqliteAvailable())('mergeIncomingDatabase', () => {
     }
   });
 
+  it('copies media recorded with windows separators and stores posix paths', async () => {
+    const local = createTestProjectDir();
+    try {
+      await createPerson({ firstName: 'Local', lastName: 'One' });
+      const fork = createForkedTestProject(local.path);
+      try {
+        const mediaId = newId();
+        const bytes = Buffer.from('windows-path-photo');
+        const hash = sha256(bytes);
+        const thumb = Buffer.from('windows-path-thumb');
+        const posixPath = `media/${mediaId}.jpg`;
+        const posixThumb = `thumbs/${mediaId}.webp`;
+        mkdirSync(join(fork.path, 'media'), { recursive: true });
+        mkdirSync(join(fork.path, 'thumbs'), { recursive: true });
+        writeFileSync(join(fork.path, posixPath), bytes);
+        writeFileSync(join(fork.path, posixThumb), thumb);
+        withForkDb(fork.path, (db) => {
+          insertMediaAsset(db, {
+            id: mediaId,
+            relativePath: `media\\${mediaId}.jpg`,
+            fileName: `${mediaId}.jpg`,
+            contentHash: hash,
+            fileSize: bytes.length,
+            thumbRelativePath: `thumbs\\${mediaId}.webp`
+          });
+        });
+
+        const result = await mergeIncomingDatabase({
+          localProjectPath: local.path,
+          incomingProjectPath: fork.path,
+          mode: 'apply'
+        });
+        if (!('applied' in result)) {
+          throw new Error('expected apply');
+        }
+        expect(result.mediaCopied).toBe(1);
+        expect(existsSync(join(local.path, posixPath))).toBe(true);
+        expect(existsSync(join(local.path, posixThumb))).toBe(true);
+
+        const row = getSqlite().prepare('SELECT relative_path, thumb_relative_path FROM media_assets WHERE id = ?').get(mediaId) as {
+          relative_path: string;
+          thumb_relative_path: string;
+        };
+        expect(row.relative_path).toBe(posixPath);
+        expect(row.thumb_relative_path).toBe(posixThumb);
+      } finally {
+        fork.cleanup();
+      }
+    } finally {
+      local.cleanup();
+    }
+  });
+
+  it('copies a missing local file on a later sync when the row was already merged', async () => {
+    const local = createTestProjectDir();
+    try {
+      const mediaId = newId();
+      const bytes = Buffer.from('already-merged-but-file-missing');
+      const hash = sha256(bytes);
+      const posixPath = `media/${mediaId}.png`;
+      insertMediaAsset(getSqlite(), {
+        id: mediaId,
+        relativePath: `media\\${mediaId}.png`,
+        fileName: `${mediaId}.png`,
+        contentHash: hash,
+        fileSize: bytes.length,
+        thumbRelativePath: `thumbs\\${mediaId}.webp`
+      });
+
+      const fork = createForkedTestProject(local.path);
+      try {
+        mkdirSync(join(fork.path, 'media'), { recursive: true });
+        mkdirSync(join(fork.path, 'thumbs'), { recursive: true });
+        writeFileSync(join(fork.path, posixPath), bytes);
+        writeFileSync(join(fork.path, `thumbs/${mediaId}.webp`), Buffer.from('thumb'));
+
+        const result = await mergeIncomingDatabase({
+          localProjectPath: local.path,
+          incomingProjectPath: fork.path,
+          mode: 'apply'
+        });
+        if (!('applied' in result)) {
+          throw new Error('expected apply');
+        }
+        expect(result.mediaCopied).toBe(1);
+        expect(existsSync(join(local.path, posixPath))).toBe(true);
+        expect(existsSync(join(local.path, `thumbs/${mediaId}.webp`))).toBe(true);
+
+        const row = getSqlite().prepare('SELECT relative_path, thumb_relative_path FROM media_assets WHERE id = ?').get(mediaId) as {
+          relative_path: string;
+          thumb_relative_path: string;
+        };
+        expect(row.relative_path).toBe(posixPath);
+        expect(row.thumb_relative_path).toBe(`thumbs/${mediaId}.webp`);
+      } finally {
+        fork.cleanup();
+      }
+    } finally {
+      local.cleanup();
+    }
+  });
+
   it('skips copy when same content_hash already exists locally', async () => {
     const local = createTestProjectDir();
     try {

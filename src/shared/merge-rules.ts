@@ -4,9 +4,13 @@ import { MERGEABLE_COLUMNS } from './merge-types';
 export type { MergeableTable, MergeRowInput, MergeRowRecord, MergeRowResult, RowDecision } from './merge-types';
 export { MERGE_TABLE_ORDER, MERGEABLE_COLUMNS } from './merge-types';
 
-function normalizeFingerprintValue(value: unknown): unknown {
+function normalizeFingerprintValue(column: string, value: unknown): unknown {
   if (value === null || value === undefined) {
     return null;
+  }
+  // Windows exports store media paths with backslashes; treat them as the same file.
+  if ((column === 'relative_path' || column === 'thumb_relative_path') && typeof value === 'string') {
+    return value.replace(/\\/g, '/');
   }
   return value;
 }
@@ -16,7 +20,7 @@ export function rowFingerprint(table: MergeableTable, row: MergeRowRecord): stri
   const columns = MERGEABLE_COLUMNS[table];
   return columns
     .map((column) => {
-      const value = normalizeFingerprintValue(row[column]);
+      const value = normalizeFingerprintValue(column, row[column]);
       return JSON.stringify(value);
     })
     .join('\u0001');
