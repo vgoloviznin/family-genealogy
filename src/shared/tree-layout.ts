@@ -395,12 +395,663 @@ function cardRight(id: string, positions: Map<string, { x: number; y: number }>,
   return positions.get(id)!.x + nodeWidth(id, nodeWidths) / 2;
 }
 
-/** Сдвигает всех, кто правее якоря — относительная геометрия дерева сохраняется */
-function shiftTreeRightFrom(minX: number, dx: number, positions: Map<string, { x: number; y: number }>) {
-  for (const [id, pos] of positions) {
-    if (pos.x >= minX - 0.01) {
-      positions.set(id, { x: pos.x + dx, y: pos.y });
+function stackedWith(
+  ids: string[],
+  generations: Map<string, number>,
+  spousesOf: Map<string, string[]>,
+  childrenOf: Map<string, string[]>,
+  positions: Map<string, { x: number; y: number }>
+): string[] {
+  const moved = new Set(ids);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const [parent, kids] of childrenOf) {
+      if (kids.length === 0) {
+        continue;
+      }
+      const generation = generations.get(parent);
+      const hasSpouse = (spousesOf.get(parent) ?? []).some((id) => (generations.get(id) ?? 0) === generation && positions.has(id));
+      if (hasSpouse) {
+        continue;
+      }
+      if (!moved.has(parent) && kids.every((id) => moved.has(id))) {
+        moved.add(parent);
+        grew = true;
+      }
+      if (moved.has(parent)) {
+        for (const id of kids) {
+          if (!moved.has(id)) {
+            moved.add(id);
+            grew = true;
+          }
+        }
+      }
     }
+  }
+  return [...moved];
+}
+
+function shiftIds(ids: string[], dx: number, positions: Map<string, { x: number; y: number }>) {
+  if (dx <= 0.5) {
+    return;
+  }
+  for (const id of ids) {
+    const pos = positions.get(id);
+    if (!pos) {
+      continue;
+    }
+    positions.set(id, { x: pos.x + dx, y: pos.y });
+  }
+}
+
+function linkIndex(pairs: Array<[string, string]>): Map<string, string[]> {
+  const map = new Map<string, string[]>();
+  for (const [a, b] of pairs) {
+    const left = map.get(a) ?? [];
+    left.push(b);
+    map.set(a, left);
+    const right = map.get(b) ?? [];
+    right.push(a);
+    map.set(b, right);
+  }
+  return map;
+}
+
+function childrenByParent(parentPairs: Array<[string, string]>): Map<string, string[]> {
+  const childrenOf = new Map<string, string[]>();
+  for (const [parent, child] of parentPairs) {
+    const list = childrenOf.get(parent) ?? [];
+    list.push(child);
+    childrenOf.set(parent, list);
+  }
+  return childrenOf;
+}
+
+/** Same-generation spouses stay one block; everyone else is a block of one. Blocks follow the left spouse. */
+function spouseBlocks(
+  ids: string[],
+  generation: number,
+  generations: Map<string, number>,
+  spousesOf: Map<string, string[]>,
+  positions: Map<string, { x: number; y: number }>
+): string[][] {
+  const remaining = new Set(ids);
+  const ordered = [...ids].sort((a, b) => positions.get(a)!.x - positions.get(b)!.x);
+  const blocks: string[][] = [];
+
+  for (const id of ordered) {
+    if (!remaining.has(id)) {
+      continue;
+    }
+    const block: string[] = [];
+    const queue = [id];
+    while (queue.length > 0) {
+      const current = queue.pop()!;
+      if (!remaining.has(current)) {
+        continue;
+      }
+      remaining.delete(current);
+      block.push(current);
+      const currentPos = positions.get(current);
+      for (const spouse of spousesOf.get(current) ?? []) {
+        if (!remaining.has(spouse) || (generations.get(spouse) ?? 0) !== generation) {
+          continue;
+        }
+        const pos = positions.get(spouse);
+        if (!pos || !currentPos || Math.abs(pos.y - currentPos.y) > 1) {
+          continue;
+        }
+        queue.push(spouse);
+      }
+    }
+    block.sort((a, b) => positions.get(a)!.x - positions.get(b)!.x);
+    blocks.push(block);
+  }
+
+  return blocks;
+}
+
+function blockHasStranger(block: string[], ids: string[], positions: Map<string, { x: number; y: number }>): boolean {
+  if (block.length < 2) {
+    return false;
+  }
+  const left = positions.get(block[0])!.x;
+  const right = positions.get(block[block.length - 1])!.x;
+  const members = new Set(block);
+  return ids.some((id) => {
+    if (members.has(id)) {
+      return false;
+    }
+    const x = positions.get(id)!.x;
+    return x > left + 0.5 && x < right - 0.5;
+  });
+}
+
+function packBlock(block: string[], leftEdge: number, positions: Map<string, { x: number; y: number }>, nodeWidths: Map<string, number>): number {
+  let x = leftEdge;
+  for (const id of block) {
+    const pos = positions.get(id)!;
+    const w = nodeWidth(id, nodeWidths);
+    positions.set(id, { x: x + w / 2, y: pos.y });
+    x += w + PEDIGREE_COUPLE_GAP;
+  }
+  return x - PEDIGREE_COUPLE_GAP;
+}
+
+/**
+ * Two unions centered on nearby children can interleave, so one spouse sits
+ * inside the other couple. Repack that row as spouse blocks.
+ */
+const LOCAL_SIBLING_SPAN = PEDIGREE_NODE_MAX_W * 3;
+
+function landsBetweenSiblings(x: number, y: number, families: TreeFamily[], positions: Map<string, { x: number; y: number }>): boolean {
+  for (const family of families) {
+    const kids = family.children.filter((id) => {
+      const pos = positions.get(id);
+      return pos != null && Math.abs(pos.y - y) < 1;
+    });
+    if (kids.length < 2) {
+      continue;
+    }
+    const left = Math.min(...kids.map((id) => positions.get(id)!.x));
+    const right = Math.max(...kids.map((id) => positions.get(id)!.x));
+    if (right - left > LOCAL_SIBLING_SPAN) {
+      continue;
+    }
+    if (x > left + 0.5 && x < right - 0.5) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function sharesSiblingGroup(id: string, allowed: Set<string>, families: TreeFamily[]): boolean {
+  return families.some((family) => family.children.includes(id) && family.children.some((kid) => kid !== id && allowed.has(kid)));
+}
+
+function rowSpouses(
+  seed: string,
+  y: number,
+  generation: number,
+  generations: Map<string, number>,
+  spousesOf: Map<string, string[]>,
+  skip: Set<string>,
+  positions: Map<string, { x: number; y: number }>
+): string[] {
+  const block: string[] = [];
+  const seen = new Set<string>();
+  const queue = [seed];
+  while (queue.length > 0) {
+    const id = queue.pop()!;
+    if (seen.has(id) || skip.has(id)) {
+      continue;
+    }
+    const pos = positions.get(id);
+    if (!pos || Math.abs(pos.y - y) > 1 || (generations.get(id) ?? 0) !== generation) {
+      continue;
+    }
+    seen.add(id);
+    block.push(id);
+    for (const spouse of spousesOf.get(id) ?? []) {
+      queue.push(spouse);
+    }
+  }
+  return block;
+}
+
+function areSpouses(a: string, b: string, spousesOf: Map<string, string[]>): boolean {
+  return (spousesOf.get(a) ?? []).includes(b);
+}
+
+/**
+ * Someone sitting between two siblings forces the parent line of that person to
+ * cross the sibling. Close the siblings and park the stranger just outside, with
+ * their parent directly above them.
+ */
+function ejectStrangersFromSiblingGaps(
+  nodeIds: string[],
+  generations: Map<string, number>,
+  families: TreeFamily[],
+  spousesOf: Map<string, string[]>,
+  childrenOf: Map<string, string[]>,
+  positions: Map<string, { x: number; y: number }>,
+  nodeWidths: Map<string, number>
+) {
+  const targetX = new Map<string, number>();
+
+  for (const family of families) {
+    const kids = family.children.filter((id) => positions.has(id));
+    if (kids.length < 2) {
+      continue;
+    }
+    const y = positions.get(kids[0])!.y;
+    if (kids.some((id) => Math.abs(positions.get(id)!.y - y) > 1)) {
+      continue;
+    }
+    const generation = generations.get(kids[0]) ?? 0;
+    const allowed = new Set(kids);
+    for (const kid of kids) {
+      for (const spouse of spousesOf.get(kid) ?? []) {
+        const pos = positions.get(spouse);
+        if (pos && Math.abs(pos.y - y) < 1 && (generations.get(spouse) ?? 0) === generation) {
+          allowed.add(spouse);
+        }
+      }
+    }
+    const left = Math.min(...kids.map((id) => positions.get(id)!.x));
+    const right = Math.max(...kids.map((id) => positions.get(id)!.x));
+    if (right - left > LOCAL_SIBLING_SPAN) {
+      continue;
+    }
+    const strangers = nodeIds
+      .filter((id) => {
+        if (allowed.has(id)) {
+          return false;
+        }
+        const pos = positions.get(id);
+        if (!pos || Math.abs(pos.y - y) > 1 || (generations.get(id) ?? 0) !== generation) {
+          return false;
+        }
+        if (sharesSiblingGroup(id, allowed, families)) {
+          return false;
+        }
+        return pos.x > left + 0.5 && pos.x < right - 0.5;
+      })
+      .sort((a, b) => positions.get(a)!.x - positions.get(b)!.x);
+    if (strangers.length === 0 || strangers.length > 2) {
+      continue;
+    }
+
+    const ordered = [...allowed].filter((id) => !targetX.has(id)).sort((a, b) => positions.get(a)!.x - positions.get(b)!.x);
+    if (ordered.length < 2) {
+      continue;
+    }
+    let cursor = Math.min(...ordered.map((id) => cardLeft(id, positions, nodeWidths)));
+    for (let i = 0; i < ordered.length; i++) {
+      const id = ordered[i];
+      const w = nodeWidth(id, nodeWidths);
+      targetX.set(id, cursor + w / 2);
+      const next = ordered[i + 1];
+      const gap = next && areSpouses(id, next, spousesOf) ? PEDIGREE_COUPLE_GAP : PEDIGREE_SIBLING_GAP;
+      cursor += w + (next ? gap : 0);
+    }
+
+    let place = cursor + PEDIGREE_ROW_GAP;
+    const pending = new Set(strangers);
+    for (const stranger of strangers) {
+      if (!pending.has(stranger) || targetX.has(stranger)) {
+        continue;
+      }
+      const block = rowSpouses(stranger, y, generation, generations, spousesOf, allowed, positions)
+        .filter((id) => !targetX.has(id))
+        .sort((a, b) => positions.get(a)!.x - positions.get(b)!.x);
+      for (const id of block) {
+        pending.delete(id);
+      }
+      const placed: string[] = [];
+      for (const id of block) {
+        const w = nodeWidth(id, nodeWidths);
+        targetX.set(id, place + w / 2);
+        placed.push(id);
+        place += w + PEDIGREE_COUPLE_GAP;
+      }
+      place += PEDIGREE_ROW_GAP;
+      const mid = placed.reduce((sum, id) => sum + targetX.get(id)!, 0) / placed.length;
+      for (const [parent, kids] of childrenOf) {
+        if (targetX.has(parent) || kids.length === 0 || kids.some((id) => !placed.includes(id))) {
+          continue;
+        }
+        const parentGen = generations.get(parent);
+        const hasSpouse = (spousesOf.get(parent) ?? []).some((id) => (generations.get(id) ?? 0) === parentGen && positions.has(id));
+        if (!hasSpouse) {
+          targetX.set(parent, mid);
+        }
+      }
+    }
+  }
+
+  for (const [id, x] of targetX) {
+    const pos = positions.get(id);
+    if (pos) {
+      positions.set(id, { x, y: pos.y });
+    }
+  }
+}
+
+function familyComponents(
+  ids: string[],
+  generation: number,
+  generations: Map<string, number>,
+  families: TreeFamily[],
+  spousesOf: Map<string, string[]>,
+  positions: Map<string, { x: number; y: number }>
+): string[][] {
+  const siblingsOf = new Map<string, string[]>();
+  for (const family of families) {
+    const kids = family.children.filter((id) => ids.includes(id));
+    for (const kid of kids) {
+      const list = siblingsOf.get(kid) ?? [];
+      for (const other of kids) {
+        if (other !== kid) {
+          list.push(other);
+        }
+      }
+      siblingsOf.set(kid, list);
+    }
+  }
+
+  const remaining = new Set(ids);
+  const ordered = [...ids].sort((a, b) => positions.get(a)!.x - positions.get(b)!.x);
+  const components: string[][] = [];
+  for (const id of ordered) {
+    if (!remaining.has(id)) {
+      continue;
+    }
+    const component: string[] = [];
+    const queue = [id];
+    while (queue.length > 0) {
+      const current = queue.pop()!;
+      if (!remaining.has(current)) {
+        continue;
+      }
+      remaining.delete(current);
+      component.push(current);
+      const y = positions.get(current)!.y;
+      for (const other of [...(spousesOf.get(current) ?? []), ...(siblingsOf.get(current) ?? [])]) {
+        if (!remaining.has(other) || (generations.get(other) ?? 0) !== generation) {
+          continue;
+        }
+        const pos = positions.get(other);
+        if (!pos || Math.abs(pos.y - y) > 1) {
+          continue;
+        }
+        queue.push(other);
+      }
+    }
+    components.push(component);
+  }
+  return components;
+}
+
+/** Spouses touch, and siblings stay on the outer side of that couple. */
+function orderFamilyBlock(component: string[], families: TreeFamily[], spousesOf: Map<string, string[]>, originalX: Map<string, number>): string[] {
+  const members = new Set(component);
+  const siblingsOf = new Map<string, string[]>();
+  for (const family of families) {
+    const kids = family.children.filter((id) => members.has(id));
+    for (const kid of kids) {
+      const list = siblingsOf.get(kid) ?? [];
+      for (const other of kids) {
+        if (other !== kid) {
+          list.push(other);
+        }
+      }
+      siblingsOf.set(kid, list);
+    }
+  }
+
+  const remaining = new Set(component);
+  const clusters: string[][] = [];
+  for (const id of [...component].sort((a, b) => originalX.get(a)! - originalX.get(b)!)) {
+    if (!remaining.has(id)) {
+      continue;
+    }
+    const cluster: string[] = [];
+    const queue = [id];
+    while (queue.length > 0) {
+      const current = queue.pop()!;
+      if (!remaining.has(current)) {
+        continue;
+      }
+      remaining.delete(current);
+      cluster.push(current);
+      for (const sibling of siblingsOf.get(current) ?? []) {
+        if (remaining.has(sibling)) {
+          queue.push(sibling);
+        }
+      }
+    }
+    clusters.push(cluster);
+  }
+  clusters.sort((a, b) => Math.min(...a.map((id) => originalX.get(id)!)) - Math.min(...b.map((id) => originalX.get(id)!)));
+
+  const unused = [...clusters];
+  const chain: string[][] = [];
+  chain.push(unused.shift()!);
+  while (unused.length > 0) {
+    const edge = chain[chain.length - 1];
+    const linked = unused.findIndex((cluster) => edge.some((id) => (spousesOf.get(id) ?? []).some((spouse) => cluster.includes(spouse))));
+    chain.push(unused.splice(linked === -1 ? 0 : linked, 1)[0]);
+  }
+
+  const ordered: string[] = [];
+  for (let i = 0; i < chain.length; i++) {
+    const cluster = chain[i];
+    const prev = chain[i - 1];
+    const next = chain[i + 1];
+    const faces = (other: string[] | undefined) =>
+      other ? cluster.find((id) => (spousesOf.get(id) ?? []).some((spouse) => other.includes(spouse))) : undefined;
+    const towardPrev = faces(prev);
+    const towardNext = faces(next);
+    const rest = cluster.filter((id) => id !== towardPrev && id !== towardNext).sort((a, b) => originalX.get(a)! - originalX.get(b)!);
+    if (towardPrev) {
+      ordered.push(towardPrev);
+    }
+    ordered.push(...rest);
+    if (towardNext && towardNext !== towardPrev) {
+      ordered.push(towardNext);
+    }
+  }
+  return ordered;
+}
+
+function componentAnchor(
+  component: string[],
+  parentsOf: Map<string, string[]>,
+  positions: Map<string, { x: number; y: number }>,
+  originalX: Map<string, number>
+): number {
+  const parentXs: number[] = [];
+  for (const id of component) {
+    for (const parent of parentsOf.get(id) ?? []) {
+      const pos = positions.get(parent);
+      if (pos) {
+        parentXs.push(pos.x);
+      }
+    }
+  }
+  if (parentXs.length > 0) {
+    return parentXs.reduce((sum, x) => sum + x, 0) / parentXs.length;
+  }
+  const xs = component.map((id) => originalX.get(id)!);
+  return xs.reduce((sum, x) => sum + x, 0) / xs.length;
+}
+
+function sharesParentSet(component: string[], parentsOf: Map<string, string[]>, positions: Map<string, { x: number; y: number }>): boolean {
+  const keyOf = (id: string) =>
+    (parentsOf.get(id) ?? [])
+      .filter((parent) => positions.has(parent))
+      .sort()
+      .join('\0');
+  const key = keyOf(component[0]);
+  return key.length > 0 && component.every((id) => keyOf(id) === key);
+}
+
+function componentPackedWidth(ordered: string[], spousesOf: Map<string, string[]>, nodeWidths: Map<string, number>): number {
+  let width = 0;
+  for (let i = 0; i < ordered.length; i++) {
+    width += nodeWidth(ordered[i], nodeWidths);
+    const next = ordered[i + 1];
+    if (next) {
+      width += areSpouses(ordered[i], next, spousesOf) ? PEDIGREE_COUPLE_GAP : PEDIGREE_SIBLING_GAP;
+    }
+  }
+  return width;
+}
+
+/**
+ * Spouse and sibling groups are one block. If another family sits inside that
+ * block, close it and place each block under its parents so the rows do not cross.
+ */
+function separateInterleavedFamilies(
+  nodeIds: string[],
+  generations: Map<string, number>,
+  families: TreeFamily[],
+  partnerPairs: Array<[string, string]>,
+  parentPairs: Array<[string, string]>,
+  positions: Map<string, { x: number; y: number }>,
+  nodeWidths: Map<string, number>
+) {
+  const spousesOf = linkIndex(partnerPairs);
+  const parentsOf = new Map<string, string[]>();
+  for (const [parent, child] of parentPairs) {
+    const list = parentsOf.get(child) ?? [];
+    list.push(parent);
+    parentsOf.set(child, list);
+  }
+  const gens = [...new Set([...generations.values()])].sort((a, b) => a - b);
+
+  for (const generation of gens) {
+    const ids = nodeIds.filter((id) => positions.has(id) && (generations.get(id) ?? 0) === generation);
+    if (ids.length === 0) {
+      continue;
+    }
+    const originalX = new Map(ids.map((id) => [id, positions.get(id)!.x]));
+    const components = familyComponents(ids, generation, generations, families, spousesOf, positions);
+    const spanOf = new Map<string[], { min: number; max: number }>();
+    for (const component of components) {
+      const xs = component.map((id) => originalX.get(id)!);
+      spanOf.set(component, { min: Math.min(...xs), max: Math.max(...xs) });
+    }
+    const ranked = components
+      .map((component) => ({
+        component,
+        anchor: componentAnchor(component, parentsOf, positions, originalX),
+        minX: spanOf.get(component)!.min
+      }))
+      .sort((a, b) => a.anchor - b.anchor || a.minX - b.minX);
+
+    let cursor = -Infinity;
+    for (const { component, anchor } of ranked) {
+      const span = spanOf.get(component)!;
+      const members = new Set(component);
+      const intruder = ids.some((id) => {
+        if (members.has(id)) {
+          return false;
+        }
+        const x = originalX.get(id)!;
+        return x > span.min + 0.5 && x < span.max - 0.5;
+      });
+      const insideOther = components.some((other) => {
+        if (other === component) {
+          return false;
+        }
+        const otherSpan = spanOf.get(other)!;
+        return component.every((id) => {
+          const x = originalX.get(id)!;
+          return x > otherSpan.min + 0.5 && x < otherSpan.max - 0.5;
+        });
+      });
+      const ordered = [...component].sort((a, b) => originalX.get(a)! - originalX.get(b)!);
+      const currentLeft = Math.min(...ordered.map((id) => cardLeft(id, positions, nodeWidths)));
+      const currentRight = Math.max(...ordered.map((id) => cardRight(id, positions, nodeWidths)));
+      const ownCenter = ordered.reduce((sum, id) => sum + positions.get(id)!.x, 0) / ordered.length;
+      const dxToAnchor = !intruder && !insideOther && sharesParentSet(component, parentsOf, positions) ? anchor - ownCenter : 0;
+      if (!intruder && !insideOther && Math.abs(dxToAnchor) < 1 && currentLeft >= cursor - 0.5) {
+        cursor = currentRight + PEDIGREE_ROW_GAP;
+        continue;
+      }
+      if (!intruder && !insideOther) {
+        let dx = dxToAnchor;
+        if (currentLeft + dx < cursor) {
+          dx = cursor - currentLeft;
+        }
+        if (Math.abs(dx) >= 0.5) {
+          for (const id of component) {
+            const pos = positions.get(id)!;
+            positions.set(id, { x: pos.x + dx, y: pos.y });
+          }
+        }
+        cursor = currentRight + dx + PEDIGREE_FAMILY_GAP;
+        continue;
+      }
+      const packed = orderFamilyBlock(component, families, spousesOf, originalX);
+      const packedWidth = componentPackedWidth(packed, spousesOf, nodeWidths);
+      const start = cursor === -Infinity ? anchor - packedWidth / 2 : Math.max(cursor, anchor - packedWidth / 2);
+      let x = start;
+      for (let i = 0; i < packed.length; i++) {
+        const id = packed[i];
+        const w = nodeWidth(id, nodeWidths);
+        const pos = positions.get(id)!;
+        positions.set(id, { x: x + w / 2, y: pos.y });
+        const next = packed[i + 1];
+        x += w + (next ? (areSpouses(id, next, spousesOf) ? PEDIGREE_COUPLE_GAP : PEDIGREE_SIBLING_GAP) : 0);
+      }
+      cursor = x + PEDIGREE_FAMILY_GAP;
+    }
+  }
+}
+
+function keepSpousesAdjacent(
+  nodeIds: string[],
+  generations: Map<string, number>,
+  partnerPairs: Array<[string, string]>,
+  parentPairs: Array<[string, string]>,
+  families: TreeFamily[],
+  positions: Map<string, { x: number; y: number }>,
+  nodeWidths: Map<string, number>
+) {
+  const spousesOf = linkIndex(partnerPairs);
+  const childrenOf = childrenByParent(parentPairs);
+  const gens = [...new Set([...generations.values()])].sort((a, b) => a - b);
+
+  for (const generation of gens) {
+    const ids = nodeIds.filter((id) => positions.has(id) && (generations.get(id) ?? 0) === generation);
+    const blocks = spouseBlocks(ids, generation, generations, spousesOf, positions);
+    if (!blocks.some((block) => blockHasStranger(block, ids, positions))) {
+      continue;
+    }
+
+    let cursor = Math.min(...ids.map((id) => cardLeft(id, positions, nodeWidths)));
+    for (const block of blocks) {
+      const blockLeft = Math.min(...block.map((id) => cardLeft(id, positions, nodeWidths)));
+      cursor = Math.max(cursor, blockLeft);
+      cursor = packBlock(block, cursor, positions, nodeWidths) + PEDIGREE_ROW_GAP;
+    }
+  }
+
+  ejectStrangersFromSiblingGaps(nodeIds, generations, families, spousesOf, childrenOf, positions, nodeWidths);
+
+  for (const [parent, kids] of childrenOf) {
+    const pos = positions.get(parent);
+    if (!pos || kids.length === 0) {
+      continue;
+    }
+    const generation = generations.get(parent);
+    const hasSpouse = (spousesOf.get(parent) ?? []).some((id) => (generations.get(id) ?? 0) === generation && positions.has(id));
+    if (hasSpouse) {
+      continue;
+    }
+    const xs = kids.map((id) => positions.get(id)?.x).filter((x): x is number => x != null);
+    if (xs.length === 0) {
+      continue;
+    }
+    const mid = (Math.min(...xs) + Math.max(...xs)) / 2;
+    const row = nodeIds.filter((id) => positions.has(id) && (generations.get(id) ?? 0) === generation && Math.abs(positions.get(id)!.y - pos.y) < 1);
+    const blocks = spouseBlocks(row, generation ?? 0, generations, spousesOf, positions);
+    const landsInCouple = blocks.some((block) => {
+      if (block.length < 2 || block.includes(parent)) {
+        return false;
+      }
+      const left = positions.get(block[0])!.x;
+      const right = positions.get(block[block.length - 1])!.x;
+      return mid > left + 0.5 && mid < right - 0.5;
+    });
+    if (landsInCouple || landsBetweenSiblings(mid, pos.y, families, positions)) {
+      continue;
+    }
+    positions.set(parent, { x: mid, y: pos.y });
   }
 }
 
@@ -408,22 +1059,28 @@ function shiftTreeRightFrom(minX: number, dx: number, positions: Map<string, { x
 function resolveGenerationOverlaps(
   nodeIds: string[],
   generations: Map<string, number>,
+  partnerPairs: Array<[string, string]>,
+  parentPairs: Array<[string, string]>,
   positions: Map<string, { x: number; y: number }>,
   nodeWidths: Map<string, number>
 ) {
+  const spousesOf = linkIndex(partnerPairs);
+  const childrenOf = childrenByParent(parentPairs);
   const gens = [...new Set([...generations.values()])].sort((a, b) => a - b);
   for (const g of gens) {
     const ids = nodeIds.filter((id) => positions.has(id) && (generations.get(id) ?? 0) === g);
-    const sorted = [...ids].sort((a, b) => cardLeft(a, positions, nodeWidths) - cardLeft(b, positions, nodeWidths));
-    for (let i = 1; i < sorted.length; i++) {
-      const prev = sorted[i - 1];
-      const curr = sorted[i];
-      const gap = cardLeft(curr, positions, nodeWidths) - cardRight(prev, positions, nodeWidths);
+    const blocks = spouseBlocks(ids, g, generations, spousesOf, positions);
+    for (let i = 1; i < blocks.length; i++) {
+      const prev = blocks[i - 1];
+      const curr = blocks[i];
+      const prevRight = Math.max(...prev.map((id) => cardRight(id, positions, nodeWidths)));
+      const currLeft = Math.min(...curr.map((id) => cardLeft(id, positions, nodeWidths)));
+      const gap = currLeft - prevRight;
       if (gap >= PEDIGREE_ROW_GAP) {
         continue;
       }
       const dx = PEDIGREE_ROW_GAP - gap;
-      shiftTreeRightFrom(positions.get(curr)!.x, dx, positions);
+      shiftIds(stackedWith(blocks.slice(i).flat(), generations, spousesOf, childrenOf, positions), dx, positions);
     }
   }
 }
@@ -656,7 +1313,9 @@ export function layoutPedigreeTree(input: PedigreeLayoutInput): Map<string, { x:
     cursor += w + PEDIGREE_FAMILY_GAP;
   }
 
-  resolveGenerationOverlaps(input.nodeIds, generations, positions, nodeWidths);
+  keepSpousesAdjacent(input.nodeIds, generations, input.partnerPairs, parentPairs, input.families, positions, nodeWidths);
+  separateInterleavedFamilies(input.nodeIds, generations, input.families, input.partnerPairs, parentPairs, positions, nodeWidths);
+  resolveGenerationOverlaps(input.nodeIds, generations, input.partnerPairs, parentPairs, positions, nodeWidths);
 
   if (positions.size > 0) {
     const xs = [...positions.values()].map((p) => p.x);

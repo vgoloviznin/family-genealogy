@@ -452,6 +452,95 @@ describe('layoutPedigreeTree', () => {
     expect(dianaLeft - vsevolodRight).toBeGreaterThanOrEqual(PEDIGREE_ROW_GAP - 1);
   });
 
+  it('draws one family beside another instead of through its siblings', () => {
+    const families: TreeFamily[] = [
+      { id: 'bur-parents', partners: ['moishe', 'udle'], children: ['rafa', 'idel'] },
+      { id: 'kad-parents', partners: ['anatoly'], children: ['busya', 'sergeyK'] },
+      { id: 'couple', partners: ['busya', 'rafa'], children: ['nella'] },
+      { id: 'gol-parents', partners: ['vasya', 'maria'], children: ['lubov', 'alexey'] },
+      { id: 'sad-couple', partners: ['lubov', 'yuri'], children: ['natalya', 'sergeyS'] },
+      { id: 'bros', partners: [], children: ['yuri', 'vladimir'] },
+      { id: 'idel-child', partners: ['idel'], children: ['dmitry'] }
+    ];
+    const partnerPairs: Array<[string, string]> = [
+      ['moishe', 'udle'],
+      ['busya', 'rafa'],
+      ['vasya', 'maria'],
+      ['lubov', 'yuri']
+    ];
+    const nodeIds = [
+      'moishe',
+      'udle',
+      'rafa',
+      'idel',
+      'anatoly',
+      'busya',
+      'sergeyK',
+      'nella',
+      'vasya',
+      'maria',
+      'lubov',
+      'alexey',
+      'yuri',
+      'vladimir',
+      'natalya',
+      'sergeyS',
+      'dmitry'
+    ];
+    const positions = layoutPedigreeTree({ nodeIds, focusId: 'nella', families, partnerPairs });
+
+    const x = (id: string) => positions.get(id)!.x;
+    const golikov = ['lubov', 'alexey', 'yuri', 'vladimir'];
+    const golLeft = Math.min(...golikov.map(x));
+    const golRight = Math.max(...golikov.map(x));
+    for (const id of ['idel', 'rafa', 'busya', 'sergeyK', 'dmitry']) {
+      expect(x(id) < golLeft || x(id) > golRight).toBe(true);
+    }
+    expect(Math.abs(x('idel') - x('dmitry'))).toBeLessThan(1);
+    expect(Math.abs(x('lubov') - x('yuri'))).toBeLessThan(PEDIGREE_NODE_MIN_W + 80);
+    const rafaToIdel = Math.min(x('rafa'), x('idel'));
+    const rafaToIdelRight = Math.max(x('rafa'), x('idel'));
+    expect(x('sergeyK') <= rafaToIdel || x('sergeyK') >= rafaToIdelRight).toBe(true);
+  });
+
+  it('does not seat another person between spouses when child bands overlap', () => {
+    const families: TreeFamily[] = [
+      { id: 'wolf', partners: ['wolf'], children: ['ides'] },
+      { id: 'kademya', partners: ['anatoly', 'ides'], children: ['busya', 'sergey'] },
+      { id: 'burilov', partners: ['moishe', 'udle'], children: ['rafa'] },
+      { id: 'couple', partners: ['busya', 'rafa'], children: ['nella'] },
+      { id: 'golikov', partners: ['vasya', 'maria'], children: ['lubov'] }
+    ];
+    const partnerPairs: Array<[string, string]> = [
+      ['anatoly', 'ides'],
+      ['moishe', 'udle'],
+      ['busya', 'rafa'],
+      ['vasya', 'maria']
+    ];
+    const nodeIds = ['wolf', 'ides', 'anatoly', 'busya', 'sergey', 'moishe', 'udle', 'rafa', 'nella', 'vasya', 'maria', 'lubov'];
+    const positions = layoutPedigreeTree({ nodeIds, focusId: 'nella', families, partnerPairs });
+
+    for (const [a, b] of partnerPairs) {
+      const posA = positions.get(a)!;
+      const posB = positions.get(b)!;
+      expect(Math.abs(posA.y - posB.y)).toBeLessThan(1);
+      const left = Math.min(posA.x, posB.x);
+      const right = Math.max(posA.x, posB.x);
+      for (const id of nodeIds) {
+        if (id === a || id === b) {
+          continue;
+        }
+        const pos = positions.get(id)!;
+        if (Math.abs(pos.y - posA.y) > 1) {
+          continue;
+        }
+        expect(pos.x <= left || pos.x >= right).toBe(true);
+      }
+    }
+
+    expect(Math.abs(positions.get('wolf')!.x - positions.get('ides')!.x)).toBeLessThan(1);
+  });
+
   it('draws partner line coords between spouse cards', () => {
     const left = { x: 0, y: 150 };
     const right = { x: 300, y: 150 };
