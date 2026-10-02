@@ -7,6 +7,7 @@ import { checkpointDatabase, getDatabasePath, getSqlite, openStandaloneDatabase 
 import { SCHEMA_VERSION } from '../db/schema';
 import { getProjectJson } from './project';
 import { decideMediaLinkMerge, decideRowMerge, resolveConflict } from '@shared/merge-rules';
+import { planFamilyCollapse } from '@shared/merge-families';
 import { applyPlaceRemapToRows, planPlaceMerge } from '@shared/merge-places';
 import { getConflictFieldDiffs } from '@shared/merge-conflict-fields';
 import {
@@ -140,6 +141,35 @@ function openIncomingCopy(incomingProjectPath: string): { db: Database.Database;
       rmSync(tempDir, { recursive: true, force: true });
     }
   };
+}
+
+/** Drop unions that repeat the same partners and children after last-write-wins. */
+function collapseDuplicateFamilies(sqlite: Database.Database): void {
+  const plan = planFamilyCollapse({
+    families: loadTable(sqlite, 'families'),
+    partners: loadTable(sqlite, 'family_partners'),
+    children: loadTable(sqlite, 'family_children')
+  });
+  if (plan.length === 0) {
+    return;
+  }
+
+  const ts = new Date().toISOString();
+  const dropPartners = sqlite.prepare('UPDATE family_partners SET deleted_at = ?, updated_at = ? WHERE family_id = ? AND deleted_at IS NULL');
+  const dropChildren = sqlite.prepare('UPDATE family_children SET deleted_at = ?, updated_at = ? WHERE family_id = ? AND deleted_at IS NULL');
+  const moveEvents = sqlite.prepare('UPDATE events SET family_id = ?, updated_at = ? WHERE family_id = ? AND deleted_at IS NULL');
+  const dropFamily = sqlite.prepare('UPDATE families SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL');
+
+  const tx = sqlite.transaction(() => {
+    for (const drop of plan) {
+      moveEvents.run(drop.keeperId, ts, drop.familyId);
+      dropPartners.run(ts, ts, drop.familyId);
+      dropChildren.run(ts, ts, drop.familyId);
+      dropFamily.run(ts, ts, drop.familyId);
+    }
+    assertNoOrphans(sqlite);
+  });
+  tx();
 }
 
 function upsertRow(sqlite: Database.Database, table: MergeableTable, row: MergeRowRecord): void {
@@ -618,6 +648,7 @@ export async function mergeIncomingDatabase(options: MergeIncomingOptions): Prom
         assertNoOrphans(localSqlite);
       });
       applyTx();
+      collapseDuplicateFamilies(localSqlite);
 
       const mediaResult = planOrCopyMediaFiles({
         localProjectPath,

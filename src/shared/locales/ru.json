@@ -452,6 +452,7 @@
     "alreadyParent": "Этот человек уже указан как родитель",
     "alreadyInUnion": "Человек уже в этом союзе",
     "alreadyChildInUnion": "Этот человек уже указан как ребёнок в союзе",
+    "alreadyParentChild": "Эта связь родитель–ребёнок уже есть",
     "familyLinkNotFound": "Семейная связь не найдена",
     "notInUnion": "Человек не состоит в этом союзе",
     "cannotDissolveWithChildren": "Нельзя удалить союз, в котором есть дети",

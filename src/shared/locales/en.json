@@ -452,6 +452,7 @@
     "alreadyParent": "This person is already listed as a parent",
     "alreadyInUnion": "Person is already in this union",
     "alreadyChildInUnion": "This person is already a child in the union",
+    "alreadyParentChild": "This parent-child link already exists",
     "familyLinkNotFound": "Family link not found",
     "notInUnion": "Person is not in this union",
     "cannotDissolveWithChildren": "Cannot delete a union that has children",

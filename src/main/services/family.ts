@@ -86,6 +86,25 @@ async function linkPartner(familyId: string, personId: string, sortOrder = 0): P
   });
 }
 
+async function findExistingParentChild(parentId: string, childId: string): Promise<boolean> {
+  const db = getDatabase();
+  const rows = await db
+    .select({ id: schema.familyChildren.id })
+    .from(schema.familyChildren)
+    .innerJoin(
+      schema.familyPartners,
+      and(
+        eq(schema.familyPartners.familyId, schema.familyChildren.familyId),
+        eq(schema.familyPartners.personId, parentId),
+        isNull(schema.familyPartners.deletedAt)
+      )
+    )
+    .innerJoin(schema.families, and(eq(schema.families.id, schema.familyChildren.familyId), isNull(schema.families.deletedAt)))
+    .where(and(eq(schema.familyChildren.personId, childId), isNull(schema.familyChildren.deletedAt)))
+    .limit(1);
+  return rows.length > 0;
+}
+
 async function linkChild(familyId: string, personId: string, pedigree: PedigreeType = 'birth'): Promise<void> {
   const db = getDatabase();
   const ts = nowIso();
@@ -297,6 +316,9 @@ export async function linkExistingParent(personId: string, parentId: string, ped
     throw new Error(localizedError('errors.cannotSelfParent'));
   }
   await withSqliteTransaction(async () => {
+    if (await findExistingParentChild(parentId, personId)) {
+      throw new Error(localizedError('errors.alreadyParent'));
+    }
     const families = await getFamiliesForPerson(personId);
     const asChild = families.find((f) => f.children.some((c) => c.person.id === personId));
     if (asChild) {
@@ -316,10 +338,30 @@ export async function linkExistingParent(personId: string, parentId: string, ped
 
 export async function linkPartnerToFamily(familyId: string, personId: string): Promise<void> {
   await withSqliteTransaction(async () => {
-    const families = await getFamiliesForPerson(personId);
-    if (families.some((f) => f.id === familyId && f.partners.some((p) => p.id === personId))) {
+    const db = getDatabase();
+    const partners = await db
+      .select()
+      .from(schema.familyPartners)
+      .where(and(eq(schema.familyPartners.familyId, familyId), isNull(schema.familyPartners.deletedAt)));
+    if (partners.some((partner) => partner.personId === personId)) {
       throw new Error(localizedError('errors.alreadyInUnion'));
     }
+
+    const [asChild] = await db
+      .select()
+      .from(schema.familyChildren)
+      .where(
+        and(eq(schema.familyChildren.familyId, familyId), eq(schema.familyChildren.personId, personId), isNull(schema.familyChildren.deletedAt))
+      );
+    if (asChild) {
+      throw new Error(localizedError('errors.cannotSelfParent'));
+    }
+
+    const unions = (await getFamiliesForPerson(personId)).filter((family) => family.partners.some((partner) => partner.id === personId));
+    if (partners.some((partner) => unions.some((family) => family.partners.some((existing) => existing.id === partner.personId)))) {
+      throw new Error(localizedError('errors.alreadySpouses'));
+    }
+
     await linkPartner(familyId, personId, 1);
     recordUndo({ type: 'family-unlink-partner', familyId, personId });
   });
@@ -334,6 +376,20 @@ async function assertAndLinkChild(familyId: string, childId: string, pedigree: P
   if (existing) {
     throw new Error(localizedError('errors.alreadyChildInUnion'));
   }
+
+  const partners = await db
+    .select()
+    .from(schema.familyPartners)
+    .where(and(eq(schema.familyPartners.familyId, familyId), isNull(schema.familyPartners.deletedAt)));
+  if (partners.some((partner) => partner.personId === childId)) {
+    throw new Error(localizedError('errors.cannotSelfChild'));
+  }
+  for (const partner of partners) {
+    if (await findExistingParentChild(partner.personId, childId)) {
+      throw new Error(localizedError('errors.alreadyParentChild'));
+    }
+  }
+
   await linkChild(familyId, childId, pedigree);
 }
 
