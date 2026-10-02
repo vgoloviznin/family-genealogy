@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'fs';
-import { basename, dirname, extname, join } from 'path';
+import { basename, dirname, extname, join, posix } from 'path';
 import { tmpdir } from 'os';
 import type Database from 'better-sqlite3';
 import { checkpointDatabase, getDatabasePath, getSqlite, openStandaloneDatabase } from '../db/connection';
@@ -232,11 +232,27 @@ function strField(row: MergeRowRecord, key: string): string | null {
   return typeof v === 'string' ? v : String(v);
 }
 
+/** Windows `path.join` stores `media\\id.png`. Archives and macOS keep `media/id.png`. */
+function normalizeMediaRelativePath(relativePath: string): string {
+  return relativePath.replace(/\\/g, '/');
+}
+
+function withPosixMediaPaths(row: MergeRowRecord): MergeRowRecord {
+  const next: MergeRowRecord = { ...row };
+  if (typeof next.relative_path === 'string') {
+    next.relative_path = normalizeMediaRelativePath(next.relative_path);
+  }
+  if (typeof next.thumb_relative_path === 'string') {
+    next.thumb_relative_path = normalizeMediaRelativePath(next.thumb_relative_path);
+  }
+  return next;
+}
+
 function isSafeRelativeMediaPath(relativePath: string): boolean {
-  if (!relativePath || relativePath.includes('..')) {
+  const normalized = normalizeMediaRelativePath(relativePath);
+  if (!normalized || normalized.includes('..')) {
     return false;
   }
-  const normalized = relativePath.replace(/\\/g, '/');
   const top = normalized.split('/')[0];
   if (SKIP_COPY_NAMES.has(basename(normalized))) {
     return false;
@@ -249,9 +265,15 @@ function collectLocalContentHashes(localProjectPath: string, localMediaRows: Mer
   const hashes = new Set<string>();
   for (const row of localMediaRows) {
     const hash = strField(row, 'content_hash');
-    if (hash) {
-      hashes.add(hash);
+    const relativePath = strField(row, 'relative_path');
+    if (!hash || !relativePath || !isSafeRelativeMediaPath(relativePath)) {
+      continue;
     }
+    // A DB row whose file was never copied must not block a later sync from copying it.
+    if (!existsSync(join(localProjectPath, normalizeMediaRelativePath(relativePath)))) {
+      continue;
+    }
+    hashes.add(hash);
   }
 
   const mediaDir = join(localProjectPath, 'media');
@@ -276,11 +298,11 @@ function alternateMediaRelativePath(row: MergeRowRecord): string {
   const id = rowId(row);
   const fileName = strField(row, 'file_name');
   if (fileName) {
-    return join('media', `${id}_${basename(fileName)}`);
+    return posix.join('media', `${id}_${basename(fileName)}`);
   }
-  const relative = strField(row, 'relative_path') ?? '';
+  const relative = normalizeMediaRelativePath(strField(row, 'relative_path') ?? '');
   const ext = extname(relative) || '.bin';
-  return join('media', `${id}${ext}`);
+  return posix.join('media', `${id}${ext}`);
 }
 
 function pathOccupiedByOtherHash(localProjectPath: string, relativePath: string, expectedHash: string): boolean {
@@ -298,8 +320,9 @@ function pathOccupiedByOtherHash(localProjectPath: string, relativePath: string,
 interface MediaCopyPlanResult {
   mediaCopied: number;
   mediaSkipped: number;
-  /** id → new relative_path when collision forced a rename */
+  /** id → new relative_path when collision forced a rename or separators were normalized */
   pathUpdates: Map<string, string>;
+  thumbUpdates: Map<string, string>;
 }
 
 /**
@@ -318,6 +341,7 @@ function planOrCopyMediaFiles(input: {
   let mediaCopied = 0;
   let mediaSkipped = 0;
   const pathUpdates = new Map<string, string>();
+  const thumbUpdates = new Map<string, string>();
 
   for (const row of candidates) {
     if (isDeleted(row)) {
@@ -325,24 +349,33 @@ function planOrCopyMediaFiles(input: {
     }
 
     const contentHash = strField(row, 'content_hash');
-    const relativePath = strField(row, 'relative_path');
-    if (!contentHash || !relativePath || !isSafeRelativeMediaPath(relativePath)) {
+    const storedPath = strField(row, 'relative_path');
+    if (!contentHash || !storedPath || !isSafeRelativeMediaPath(storedPath)) {
       mediaSkipped++;
       continue;
     }
 
+    const relativePath = normalizeMediaRelativePath(storedPath);
     const incomingFile = join(incomingProjectPath, relativePath);
     if (!existsSync(incomingFile)) {
+      if (storedPath !== relativePath && existsSync(join(localProjectPath, relativePath))) {
+        pathUpdates.set(rowId(row), relativePath);
+      }
       mediaSkipped++;
       continue;
     }
 
     if (knownHashes.has(contentHash)) {
       mediaSkipped++;
+      if (storedPath !== relativePath) {
+        pathUpdates.set(rowId(row), relativePath);
+      }
     } else {
       let destRelative = relativePath;
       if (pathOccupiedByOtherHash(localProjectPath, relativePath, contentHash)) {
         destRelative = alternateMediaRelativePath(row);
+      }
+      if (destRelative !== storedPath) {
         pathUpdates.set(rowId(row), destRelative);
       }
 
@@ -355,8 +388,9 @@ function planOrCopyMediaFiles(input: {
       mediaCopied++;
     }
 
-    const thumbRel = strField(row, 'thumb_relative_path');
-    if (thumbRel && isSafeRelativeMediaPath(thumbRel)) {
+    const storedThumb = strField(row, 'thumb_relative_path');
+    if (storedThumb && isSafeRelativeMediaPath(storedThumb)) {
+      const thumbRel = normalizeMediaRelativePath(storedThumb);
       const incomingThumb = join(incomingProjectPath, thumbRel);
       const localThumb = join(localProjectPath, thumbRel);
       if (existsSync(incomingThumb) && !existsSync(localThumb)) {
@@ -365,19 +399,31 @@ function planOrCopyMediaFiles(input: {
           copyFileSync(incomingThumb, localThumb);
         }
       }
+      if (thumbRel !== storedThumb) {
+        thumbUpdates.set(rowId(row), thumbRel);
+      }
     }
   }
 
-  return { mediaCopied, mediaSkipped, pathUpdates };
+  return { mediaCopied, mediaSkipped, pathUpdates, thumbUpdates };
 }
 
-function applyMediaPathUpdates(sqlite: Database.Database, pathUpdates: Map<string, string>): void {
-  if (pathUpdates.size === 0) {
-    return;
+function applyMediaPathUpdates(
+  sqlite: Database.Database,
+  pathUpdates: Map<string, string>,
+  thumbUpdates: Map<string, string>
+): void {
+  if (pathUpdates.size > 0) {
+    const stmt = sqlite.prepare('UPDATE media_assets SET relative_path = ? WHERE id = ?');
+    for (const [id, relativePath] of pathUpdates) {
+      stmt.run(relativePath, id);
+    }
   }
-  const stmt = sqlite.prepare('UPDATE media_assets SET relative_path = ? WHERE id = ?');
-  for (const [id, relativePath] of pathUpdates) {
-    stmt.run(relativePath, id);
+  if (thumbUpdates.size > 0) {
+    const stmt = sqlite.prepare('UPDATE media_assets SET thumb_relative_path = ? WHERE id = ?');
+    for (const [id, thumbPath] of thumbUpdates) {
+      stmt.run(thumbPath, id);
+    }
   }
 }
 
@@ -459,20 +505,21 @@ export async function mergeIncomingDatabase(options: MergeIncomingOptions): Prom
     };
 
     const queueWinner = (table: MergeableTable, winner: MergeRowRecord, local: MergeRowRecord | null) => {
-      noteMediaCandidate(table, winner);
+      const row = table === 'media_assets' ? withPosixMediaPaths(winner) : winner;
+      noteMediaCandidate(table, row);
       if (table === 'people') {
         const id = rowId(winner);
         deferredPhotos.push({ id, primary_photo_id: winner.primary_photo_id ?? null });
         pendingWrites.push({
           table,
           row: {
-            ...winner,
+            ...row,
             primary_photo_id: local?.primary_photo_id ?? null
           }
         });
         return;
       }
-      pendingWrites.push({ table, row: winner });
+      pendingWrites.push({ table, row });
     };
 
     const handleDecision = (input: {
@@ -499,6 +546,8 @@ export async function mergeIncomingDatabase(options: MergeIncomingOptions): Prom
             } else {
               noteMediaCandidate(table, resolved);
             }
+          } else if (table === 'media_assets' && local && !isDeleted(local)) {
+            noteMediaCandidate(table, local);
           }
           return;
         }
@@ -508,6 +557,10 @@ export async function mergeIncomingDatabase(options: MergeIncomingOptions): Prom
       }
 
       bumpStats(tableStats, decision);
+      if (decision === 'keep-local' && table === 'media_assets' && local && !isDeleted(local)) {
+        // Re-sync must copy files skipped earlier (for example Windows path separators).
+        noteMediaCandidate(table, local);
+      }
       if (decision === 'insert-remote' || decision === 'take-remote') {
         if (winner) {
           if (mode === 'apply') {
@@ -577,8 +630,8 @@ export async function mergeIncomingDatabase(options: MergeIncomingOptions): Prom
         candidates: mediaCandidates,
         apply: true
       });
-      if (mediaResult.pathUpdates.size > 0) {
-        applyMediaPathUpdates(localSqlite, mediaResult.pathUpdates);
+      if (mediaResult.pathUpdates.size > 0 || mediaResult.thumbUpdates.size > 0) {
+        applyMediaPathUpdates(localSqlite, mediaResult.pathUpdates, mediaResult.thumbUpdates);
       }
       localTarget.checkpoint();
 

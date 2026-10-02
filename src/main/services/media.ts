@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 import { copyFileSync, createReadStream, existsSync, mkdirSync, statSync, unlinkSync } from 'fs';
-import { join, extname, basename, resolve, sep } from 'path';
+import { join, extname, basename, resolve, sep, posix } from 'path';
 import { dialog, shell } from 'electron';
 import { eq, and, isNull, inArray } from 'drizzle-orm';
 import { getDatabase } from '../db/connection';
@@ -49,8 +49,13 @@ function mimeFromExt(ext: string): string {
   return map[ext.toLowerCase()] ?? 'application/octet-stream';
 }
 
+/** Archive and Windows builds may store `media\\id.png`; URLs and disk paths use `/`. */
+export function normalizeStoredMediaPath(relativePath: string): string {
+  return relativePath.replace(/\\/g, '/');
+}
+
 export function mediaUrl(relativePath: string): string {
-  const encoded = relativePath.split('/').map(encodeURIComponent).join('/');
+  const encoded = normalizeStoredMediaPath(relativePath).split('/').map(encodeURIComponent).join('/');
   return `family-media://project/${encoded}`;
 }
 
@@ -191,7 +196,7 @@ async function importMediaFile(sourcePath: string, target: { personId?: string; 
   const fileStat = statSync(sourcePath);
   assertMediaFileSize(fileStat.size);
   const ext = extname(sourcePath) || '.bin';
-  const relativePath = join('media', `${id}${ext}`);
+  const relativePath = posix.join('media', `${id}${ext}`);
   const destPath = join(project.path, relativePath);
   mkdirSync(join(project.path, 'media'), { recursive: true });
   copyFileSync(sourcePath, destPath);
@@ -205,7 +210,7 @@ async function importMediaFile(sourcePath: string, target: { personId?: string; 
       // Lazy-load: a top-level sharp require crashes the whole app if the
       // platform binary is missing (seen on Intel macOS DMGs).
       const sharp = (await import('sharp')).default;
-      thumbRelativePath = join('thumbs', `${id}.webp`);
+      thumbRelativePath = posix.join('thumbs', `${id}.webp`);
       const thumbPath = join(project.path, thumbRelativePath);
       mkdirSync(join(project.path, 'thumbs'), { recursive: true });
       await sharp(destPath).resize(320, 320, { fit: 'inside' }).webp({ quality: 80 }).toFile(thumbPath);
@@ -299,7 +304,7 @@ function resolveProjectRelativePath(relativePath: string): string | null {
   try {
     const project = requireProject();
     const root = resolve(project.path);
-    const full = resolve(project.path, relativePath);
+    const full = resolve(project.path, normalizeStoredMediaPath(relativePath));
     if (!isPathInsideRoot(root, full)) {
       return null;
     }

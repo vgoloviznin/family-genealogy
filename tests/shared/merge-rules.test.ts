@@ -42,6 +42,23 @@ describe('rowFingerprint', () => {
     expect(rowFingerprint('people', a)).toBe(rowFingerprint('people', b));
   });
 
+  it('treats windows and posix media paths as the same file', () => {
+    const local = {
+      relative_path: 'media\\photo.png',
+      thumb_relative_path: 'thumbs\\photo.webp',
+      file_name: 'photo.png',
+      content_hash: 'abc'
+    };
+    const remote = {
+      relative_path: 'media/photo.png',
+      thumb_relative_path: 'thumbs/photo.webp',
+      file_name: 'photo.png',
+      content_hash: 'abc'
+    };
+    expect(rowFingerprint('media_assets', local)).toBe(rowFingerprint('media_assets', remote));
+    expect(decideRowMerge({ table: 'media_assets', local, remote }).decision).toBe('keep-local');
+  });
+
   it('ignores updated_at differences', () => {
     const a = person({ updated_at: '2024-01-01T00:00:00.000Z' });
     const b = person({ updated_at: '2025-01-01T00:00:00.000Z' });

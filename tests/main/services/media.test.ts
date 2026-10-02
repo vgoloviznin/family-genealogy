@@ -39,6 +39,7 @@ function writeTinyPng(path: string): void {
 describe('media helpers', () => {
   it('builds encoded media URLs', () => {
     expect(mediaUrl('media/photo one.jpg')).toBe('family-media://project/media/photo%20one.jpg');
+    expect(mediaUrl('media\\photo.png')).toBe('family-media://project/media/photo.png');
   });
 
   it('rejects files over 50MB', () => {
@@ -111,6 +112,7 @@ describe.skipIf(!isSqliteAvailable())('media service', () => {
       const relativePath = `media/${item.id}.png`;
 
       expect(resolveMediaPath(relativePath)).toBe(join(project.path, relativePath));
+      expect(resolveMediaPath(relativePath.replaceAll('/', '\\'))).toBe(join(project.path, relativePath));
       expect(resolveMediaPath('../outside.png')).toBeNull();
       expect(resolveMediaPath('missing/file.png')).toBeNull();
 
